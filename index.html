@@ -1,0 +1,3291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具条件計算システム v4.0 — フライス / ドリル / タップ / 旋盤</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --pri:#1e3a5f;--sec:#2563eb;--acc:#7c3aed;--acc2:#db2777;
+  --ok:#16a34a;--warn:#d97706;--ng:#dc2626;--crit:#7c3aed;
+  --bg:#0f172a;--card:#1e293b;--card2:#273549;--border:#334155;
+  --txt:#f1f5f9;--txt2:#94a3b8;--txt3:#64748b;
+  --grad1:linear-gradient(135deg,#1e3a5f,#2563eb);
+  --grad2:linear-gradient(135deg,#7c3aed,#db2777);
+  --grad3:linear-gradient(135deg,#0f766e,#0891b2);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI','Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;padding:12px;font-size:13px}
+.container{max-width:1600px;margin:0 auto}
+
+/* ===== HEADER ===== */
+header{background:var(--card);border-radius:16px;padding:20px 24px;margin-bottom:16px;border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.hdr-logo{display:flex;align-items:center;gap:14px}
+.logo-icon{width:52px;height:52px;background:var(--grad2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px}
+.logo-text h1{font-size:20px;font-weight:800;background:var(--grad2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo-text p{font-size:10px;color:var(--txt2);margin-top:2px}
+.hdr-badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid}
+.badge.sci{background:rgba(124,58,237,.2);border-color:#7c3aed;color:#a78bfa}
+.badge.iso{background:rgba(37,99,235,.2);border-color:#2563eb;color:#60a5fa}
+.badge.jis{background:rgba(16,185,129,.2);border-color:#10b981;color:#6ee7b7}
+
+/* ===== TABS ===== */
+.tab-outer{background:var(--card);border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid var(--border)}
+.tab-group{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tab-group-label{font-size:10px;color:var(--txt3);font-weight:700;white-space:nowrap;padding:0 8px 0 4px;border-right:1px solid var(--border);margin-right:4px}
+.tab-btn{padding:8px 16px;border:1px solid var(--border);background:var(--card2);color:var(--txt2);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .25s;white-space:nowrap}
+.tab-btn:hover{background:rgba(37,99,235,.2);color:var(--txt);border-color:#2563eb}
+.tab-btn.active{background:var(--grad2);color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(124,58,237,.4)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* ===== LAYOUT ===== */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.four-col{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+@media(max-width:1200px){.two-col{grid-template-columns:1fr}.four-col{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.three-col,.four-col{grid-template-columns:1fr 1fr}}
+
+/* ===== CARD ===== */
+.card{background:var(--card);border-radius:14px;padding:18px;border:1px solid var(--border);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.card-title{font-size:14px;font-weight:700;color:var(--txt);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--border);display:flex;align-items:center;gap:8px}
+.card-title span{font-size:16px}
+
+/* ===== FORM ===== */
+.section-title{font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin:14px 0 8px;padding-left:8px;border-left:3px solid #7c3aed}
+.input-group{margin-bottom:8px}
+label{display:block;font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px}
+label .unit-tag{color:var(--txt3);font-weight:400}
+input[type=number],input[type=text],select{width:100%;padding:8px 10px;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--txt);font-size:12px;transition:all .2s}
+input:focus,select:focus{outline:none;border-color:#7c3aed;box-shadow:0 0 0 2px rgba(124,58,237,.2)}
+input[readonly]{cursor:default}
+.hint{font-size:10px;color:var(--txt3);margin-top:2px;line-height:1.5}
+
+/* feedback colors */
+.f-auto{background:rgba(37,99,235,.15)!important;border-color:#3b82f6!important;color:#93c5fd!important;font-weight:700}
+.f-ok{background:rgba(22,163,74,.15)!important;border-color:#22c55e!important;color:#86efac!important;font-weight:700}
+.f-warn{background:rgba(217,119,6,.15)!important;border-color:#f59e0b!important;color:#fcd34d!important;font-weight:700}
+.f-ng{background:rgba(220,38,38,.2)!important;border-color:#ef4444!important;color:#fca5a5!important;font-weight:700}
+.f-crit{background:rgba(124,58,237,.25)!important;border-color:#7c3aed!important;color:#c4b5fd!important;font-weight:700}
+
+/* ===== TOOL SELECTOR ===== */
+.tool-card{background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(219,39,119,.1));border:1px solid rgba(124,58,237,.4);border-radius:12px;padding:14px;margin-bottom:14px}
+.tool-card h4{font-size:12px;font-weight:700;color:#c4b5fd;margin-bottom:8px}
+.tool-desc-panel{background:rgba(0,0,0,.25);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--txt2);line-height:1.7}
+.tool-desc-panel .td-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.td-chip{background:rgba(255,255,255,.08);border-radius:4px;padding:2px 7px;font-size:10px}
+
+/* ===== MACHINE BOX ===== */
+.mach-card{background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(6,182,212,.08));border:1px solid rgba(37,99,235,.35);border-radius:12px;padding:14px;margin-bottom:14px}
+.mach-card h4{font-size:12px;font-weight:700;color:#93c5fd;margin-bottom:8px}
+
+/* ===== PHYSICS PANEL ===== */
+.phys-panel{border-radius:12px;padding:14px;margin:12px 0;border:2px solid}
+.phys-panel.ok{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.4)}
+.phys-panel.warn{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.4)}
+.phys-panel.ng{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.4)}
+.phys-panel.crit{background:rgba(124,58,237,.12);border-color:rgba(124,58,237,.5)}
+.phys-panel h4{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.phys-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px;margin-bottom:10px}
+.phys-item{background:rgba(255,255,255,.05);padding:9px;border-radius:8px;text-align:center;border:1px solid rgba(255,255,255,.06)}
+.p-lbl{font-size:9px;color:var(--txt3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
+.p-val{font-size:13px;font-weight:700;color:var(--txt)}
+.verdict{padding:11px;border-radius:8px;text-align:center;font-size:14px;font-weight:700;margin-top:10px}
+.verdict.ok{background:rgba(22,163,74,.15);color:#86efac;border:1px solid rgba(22,163,74,.3)}
+.verdict.warn{background:rgba(217,119,6,.15);color:#fcd34d;border:1px solid rgba(217,119,6,.3)}
+.verdict.ng,.verdict.crit{background:rgba(124,58,237,.2);color:#c4b5fd;border:1px solid rgba(124,58,237,.4)}
+
+/* ===== BARS ===== */
+.bar-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--txt3);margin:8px 0 3px}
+.bar-wrap{background:rgba(255,255,255,.06);border-radius:6px;height:20px;overflow:hidden;border:1px solid rgba(255,255,255,.07)}
+.bar-fill{height:100%;border-radius:6px;display:flex;align-items:center;padding:0 8px;transition:width .5s,background .5s;min-width:30px}
+.bar-fill span{font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.dual-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.bar-group label{font-size:10px;color:var(--txt3);margin-bottom:3px;display:block}
+
+/* ===== CALC BUTTON ===== */
+.calc-btn{width:100%;padding:13px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all .3s;margin-top:12px;letter-spacing:.5px}
+.calc-btn.enabled{background:var(--grad2);color:#fff;box-shadow:0 4px 16px rgba(124,58,237,.35)}
+.calc-btn.enabled:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(124,58,237,.5)}
+.calc-btn.disabled-btn{background:rgba(255,255,255,.07);color:var(--txt3);cursor:not-allowed;border:1px solid var(--border)}
+
+/* ===== RESULT ===== */
+.result-header{border-radius:12px;padding:18px;margin-bottom:14px}
+.result-header.ok-res{background:linear-gradient(135deg,rgba(16,185,129,.2),rgba(6,182,212,.15));border:1px solid rgba(16,185,129,.35)}
+.result-header.warn-res{background:linear-gradient(135deg,rgba(217,119,6,.2),rgba(234,88,12,.15));border:1px solid rgba(217,119,6,.35)}
+.result-header.ng-res{background:linear-gradient(135deg,rgba(220,38,38,.2),rgba(124,58,237,.15));border:1px solid rgba(220,38,38,.35)}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.res-item{background:rgba(255,255,255,.07);padding:13px;border-radius:9px;border:1px solid rgba(255,255,255,.08)}
+.res-lbl{font-size:10px;color:var(--txt2);margin-bottom:4px}
+.res-val{font-size:16px;font-weight:700;color:#fff}
+.res-hl{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);grid-column:1/-1}
+.res-hl .res-val{font-size:22px;color:#ffd700}
+
+/* ===== FORMULA BOX ===== */
+.fml-box{background:var(--card2);border-radius:10px;padding:14px;margin-top:12px;border:1px solid var(--border)}
+.fml-box h4{font-size:11px;color:var(--txt2);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.fml-box code{display:block;background:rgba(0,0,0,.35);padding:12px;border-radius:7px;font-family:'Consolas','Courier New',monospace;font-size:10.5px;color:#a5f3fc;line-height:1.75;white-space:pre-wrap;word-break:break-all}
+
+/* ===== INFO BOXES ===== */
+.info-box{padding:11px 13px;border-radius:8px;border-left:4px solid;margin:8px 0}
+.ib-red{background:rgba(220,38,38,.1);border-color:#ef4444}.ib-red h3,.ib-red p{color:#fca5a5}
+.ib-yellow{background:rgba(217,119,6,.1);border-color:#f59e0b}.ib-yellow h3,.ib-yellow p{color:#fcd34d}
+.ib-blue{background:rgba(37,99,235,.1);border-color:#3b82f6}.ib-blue h3,.ib-blue p{color:#93c5fd}
+.ib-green{background:rgba(22,163,74,.1);border-color:#22c55e}.ib-green h3,.ib-green p{color:#86efac}
+.ib-purple{background:rgba(124,58,237,.1);border-color:#7c3aed}.ib-purple h3,.ib-purple p{color:#c4b5fd}
+.info-box h3{font-size:11px;font-weight:700;margin-bottom:4px}
+.info-box p{font-size:11px;line-height:1.7}
+
+/* ===== TOOLTIP ===== */
+.tip{position:relative;display:inline-block;cursor:help;color:#7c3aed;font-size:11px;font-weight:700;margin-left:4px}
+.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#f1f5f9;padding:7px 10px;border-radius:7px;font-size:10px;white-space:normal;min-width:200px;max-width:280px;line-height:1.6;border:1px solid #334155;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.tip:hover::after{opacity:1}
+
+/* ===== SPECIAL PANELS ===== */
+.option-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--card2);color:var(--txt2);font-size:11px;cursor:pointer;transition:all .2s}
+.chip-btn.active{background:rgba(124,58,237,.3);border-color:#7c3aed;color:#c4b5fd}
+.highlight-box{background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(219,39,119,.1));border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:12px;margin:8px 0}
+.highlight-box h4{font-size:11px;font-weight:700;color:#c4b5fd;margin-bottom:6px}
+
+/* ===== TABS sub ===== */
+.sub-tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap}
+.sub-tab{padding:6px 14px;border:1px solid var(--border);background:var(--card2);color:var(--txt3);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;transition:all .2s}
+.sub-tab.active{background:rgba(37,99,235,.25);border-color:#3b82f6;color:#93c5fd}
+
+/* ===== HIDDEN ===== */
+.hidden{display:none!important}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--card)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#475569}
+
+/* ===== COMPARE TABLE ===== */
+.cmp-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+.cmp-table th{background:rgba(124,58,237,.2);color:#c4b5fd;padding:8px;text-align:center;font-weight:700}
+.cmp-table td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt2)}
+.cmp-table tr:hover td{background:rgba(255,255,255,.04)}
+.cmp-table .hi{color:#ffd700;font-weight:700}
+
+/* ===== TAYLOR PLOT ===== */
+.mini-chart{background:rgba(0,0,0,.25);border-radius:8px;padding:10px;margin-top:8px;border:1px solid var(--border)}
+.mini-chart h5{font-size:10px;color:var(--txt3);margin-bottom:6px;font-weight:700}
+svg.taylor{width:100%;height:120px}
+
+/* ===== STABILITY PANEL ===== */
+.stability-ring{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;padding:10px}
+.ring-item{text-align:center}
+.ring-svg{width:70px;height:70px}
+
+/* ===== 印刷ボタン ===== */
+.print-btn{padding:7px 16px;border-radius:8px;border:1px solid #22c55e;background:rgba(22,163,74,.15);color:#86efac;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.print-btn:hover{background:rgba(22,163,74,.3)}
+
+/* ===== 印刷スタイル ===== */
+@media print{
+  body{background:#fff!important;color:#000!important;font-size:10pt}
+  .tab-outer,.tab-btn,.calc-btn,.print-btn,.hdr-badges{display:none!important}
+  .tab-content{display:block!important}
+  .card{border:1px solid #ccc!important;background:#fff!important;box-shadow:none!important;break-inside:avoid}
+  .phys-panel,.result-header,.fml-box{background:#f5f5f5!important;border:1px solid #ccc!important}
+  input,select{border:1px solid #ccc!important;background:#fff!important;color:#000!important}
+  .res-val,.p-val{color:#000!important}
+  :root{--txt:#000;--txt2:#333;--txt3:#555;--bg:#fff;--card:#fff;--card2:#f5f5f5;--border:#ccc}
+}
+
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ===== HEADER ===== -->
+<header>
+  <div class="hdr-top">
+    <div class="hdr-logo">
+      <div class="logo-icon">⚙️</div>
+      <div class="logo-text">
+        <h1>ACMS Pro — Advanced Cutting Conditions Master System</h1>
+        <p>学術級切削条件計算システム v3.0 | 物理精密版 | JIS B 4011 / ISO 3685 / Taylor工具寿命方程式準拠</p>
+      </div>
+    </div>
+    <div class="hdr-badges">
+      <span class="badge sci">🔬 学術級物理演算</span>
+      <span class="badge iso">📐 ISO 3685準拠</span>
+      <span class="badge jis">🇯🇵 JIS B 4011準拠</span>
+      <span class="badge sci">⚡ 高送り対応</span>
+      <span class="badge iso">🏭 工具長補正</span>
+      <span class="badge jis">🔴 タップ加工</span>
+    </div>
+    <button class="print-btn" onclick="window.print()">🖨️ 印刷</button>
+  </div>
+</header>
+
+<!-- ===== MAIN TABS ===== -->
+<div class="tab-outer">
+  <div class="tab-group">
+    <span class="tab-group-label">加工種別</span>
+    <button class="tab-btn active" onclick="switchMain('milling',this)">🔧 フライス / エンドミル</button>
+    <button class="tab-btn" onclick="switchMain('facemill',this)">🔵 チップ式フェイスミル</button>
+    <button class="tab-btn" onclick="switchMain('indexable',this)">🟠 チップ式エンドミル</button>
+    <button class="tab-btn" onclick="switchMain('hf',this)">⚡ 高送りミル</button>
+    <button class="tab-btn" onclick="switchMain('drilling',this)">🔩 ドリル加工</button>
+    <button class="tab-btn" onclick="switchMain('tap',this)" style="background:linear-gradient(135deg,rgba(220,38,38,.25),rgba(239,68,68,.15));border-color:#ef4444;color:#fca5a5;font-weight:800">🔴 タップ加工 ★</button>
+    <button class="tab-btn" onclick="switchMain('turning',this)">🔄 旋盤加工</button>
+    <button class="tab-btn" onclick="switchMain('compare',this)">📊 条件比較</button>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- ===== TAB: フライス / エンドミル ===== -->
+<!-- ================================================================ -->
+<div id="tab_milling" class="tab-content active">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>🔧</span> ソリッドエンドミル 入力</h2>
+
+  <!-- 工具材質 -->
+  <div class="tool-card">
+    <h4>🔨 工具材質</h4>
+    <select id="m_tool" onchange="refreshM()">
+      <option value="hss">高速度鋼 HSS</option>
+      <option value="cobalt">コバルトハイス Co-HSS</option>
+      <option value="carbide" selected>超硬合金 ソリッドカーバイド</option>
+      <option value="altin">AlTiNコーティング超硬</option>
+      <option value="altisiN">AlTiSiNコーティング超硬（高温対応）</option>
+      <option value="diamond">DLCダイヤモンドコーティング（Al専用）</option>
+    </select>
+    <div class="tool-desc-panel" id="m_tool_desc"></div>
+  </div>
+
+  <!-- 機械スペック -->
+  <div class="mach-card">
+    <h4>🏭 機械スペック</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>主軸出力 Pm <span class="unit-tag">[kW]</span></label>
+        <input type="number" id="m_motor" value="7.5" step="0.5" oninput="refreshM()">
+        <div class="hint">小型MC:3.7 / 標準:7.5 / 大型:15〜22</div>
+      </div>
+      <div class="input-group">
+        <label>伝達効率 η</label>
+        <input type="number" id="m_eta" value="0.80" step="0.01" oninput="refreshM()">
+        <div class="hint">ベルト:0.75〜0.85 / 直結:0.85〜0.95</div>
+      </div>
+      <div class="input-group">
+        <label>主軸最高回転数 <span class="unit-tag">[rpm]</span></label>
+        <input type="number" id="m_nmax" value="12000" step="1000" oninput="refreshM()">
+        <div class="hint">標準:6000〜8000 / 高速主軸:20000+</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">工具形状・切込み条件</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>工具径 D <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="m_D" step="0.1" placeholder="10" oninput="refreshM()">
+    </div>
+    <div class="input-group">
+      <label>刃数 Z</label>
+      <select id="m_Z" onchange="refreshM()">
+        <option value="2">2刃</option>
+        <option value="3">3刃</option>
+        <option value="4" selected>4刃</option>
+        <option value="5">5刃</option>
+        <option value="6">6刃</option>
+        <option value="8">8刃</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>被削材</label>
+      <select id="m_mat" onchange="refreshM()">
+        <option value="al">アルミ合金 (A2017/5052)</option>
+        <option value="al7075">A7075 超ジュラルミン</option>
+        <option value="steel">S45C / SS400 一般鋼</option>
+        <option value="steel_h">SCM440 合金鋼 (HRC30)</option>
+        <option value="steel_hh">SKD11 焼入鋼 (HRC55)</option>
+        <option value="sus304">SUS304 オーステナイト系</option>
+        <option value="sus316">SUS316L</option>
+        <option value="cast">鋳鉄 FC250</option>
+        <option value="ti">Ti-6Al-4V</option>
+        <option value="ni">Inconel 718</option>
+        <option value="cu">銅合金 C3604</option>
+        <option value="cfrp">CFRP 炭素繊維複合材</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>加工区分</label>
+      <select id="m_proc" onchange="refreshM()">
+        <option value="rough">荒加工</option>
+        <option value="semi">中仕上げ</option>
+        <option value="finish">仕上げ</option>
+      </select>
+    </div>
+  </div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>軸方向切込み ap <span class="unit-tag">[mm]</span> <span class="tip" data-tip="ap≤Dが基本。ap>Dは特殊条件で工具強度が急激に低下">?</span></label>
+      <input type="number" id="m_ap" value="2" step="0.1" oninput="refreshM()">
+    </div>
+    <div class="input-group">
+      <label>径方向切込み ae <span class="unit-tag">[mm]</span> <span class="tip" data-tip="ae=Dはフルスロット。フルスロットは切削力が最大。スロッティング時は特に注意">?</span></label>
+      <input type="number" id="m_ae" value="5" step="0.1" oninput="refreshM()">
+    </div>
+    <div class="input-group">
+      <label>加工長さ L <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="m_L" value="100" step="1">
+    </div>
+    <div class="input-group">
+      <label>パス数</label>
+      <input type="number" id="m_pass" value="1" step="1">
+    </div>
+  </div>
+
+  <div class="section-title">工具長・突き出し（切削条件への影響計算）</div>
+  <div class="three-col">
+    <div class="input-group">
+      <label>全長 OAL <span class="unit-tag">[mm]</span> <span class="tip" data-tip="Overall Length。空欄の場合は標準値(3D)で計算">?</span></label>
+      <input type="number" id="m_OAL" step="0.5" placeholder="未入力=標準(3D)" oninput="refreshM()">
+    </div>
+    <div class="input-group">
+      <label>刃長 LOC <span class="unit-tag">[mm]</span> <span class="tip" data-tip="Length of Cut。刃部長さ。未入力=1.5D">?</span></label>
+      <input type="number" id="m_LOC" step="0.5" placeholder="未入力=標準(1.5D)" oninput="refreshM()">
+    </div>
+    <div class="input-group">
+      <label>突き出し量 OH <span class="unit-tag">[mm]</span> <span class="tip" data-tip="Overhang。ホルダ端面〜工具先端距離。長いほど曲げモーメント増加。未入力=3D">?</span></label>
+      <input type="number" id="m_OH" step="0.5" placeholder="未入力=標準(3D)" oninput="refreshM()">
+    </div>
+  </div>
+  <div class="highlight-box">
+    <h4>⚠ OH/D比による切削条件低減係数（自動適用）</h4>
+    <div id="m_oh_info" style="font-size:11px;color:var(--txt2)">工具径と突き出しを入力すると表示</div>
+  </div>
+
+  <div class="section-title">自動計算結果</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>切削速度 Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="m_Vc" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>物理上限 fz_max ★自動 <span class="unit-tag">[mm/刃]</span></label>
+      <input id="m_fzmax" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>確定 fz ★自動 <span class="unit-tag">[mm/刃]</span></label>
+      <input id="m_fz" readonly>
+    </div>
+    <div class="input-group">
+      <label>主軸回転数 S ★自動 <span class="unit-tag">[rpm]</span></label>
+      <input id="m_S_prev" class="f-auto" readonly>
+    </div>
+  </div>
+
+  <!-- 物理解析パネル -->
+  <div id="m_phys_panel" class="phys-panel ok">
+    <h4>📐 リアルタイム物理解析</h4>
+    <div class="phys-grid" id="m_phys_grid"></div>
+    <div class="dual-bar">
+      <div class="bar-group">
+        <label>機械負荷率</label>
+        <div class="bar-wrap"><div class="bar-fill" id="m_bar_load" style="width:0%"><span id="m_pct_load">0%</span></div></div>
+      </div>
+      <div class="bar-group">
+        <label>工具応力比</label>
+        <div class="bar-wrap"><div class="bar-fill" id="m_bar_stress" style="width:0%"><span id="m_pct_stress">0%</span></div></div>
+      </div>
+    </div>
+    <div class="verdict ok" id="m_verdict">工具径を入力してください</div>
+  </div>
+  <button class="calc-btn disabled-btn" id="m_btn" onclick="calcM()">⚙️ 切削条件を正確計算する</button>
+</div>
+
+<!-- RIGHT: 結果パネル -->
+<div class="card">
+  <h2 class="card-title"><span>💡</span> 計算根拠・結果・解析</h2>
+
+  <div id="m_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 入力値の物理根拠</h4>
+    <div id="m_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示されます</p></div>
+  </div>
+
+  <div id="m_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="m_rh">
+      <div class="res-grid" id="m_rg"></div>
+    </div>
+    <!-- Taylor寿命 -->
+    <div class="mini-chart" id="m_taylor_box">
+      <h5>📈 Taylor工具寿命曲線 (T vs Vc)</h5>
+      <svg class="taylor" id="m_taylor_svg" viewBox="0 0 400 120"></svg>
+    </div>
+    <div id="m_warns"></div>
+    <div class="fml-box"><h4>📐 全計算式詳細ログ</h4><code id="m_fml"></code></div>
+  </div>
+  <div id="m_ng_wrap"></div>
+</div>
+</div>
+</div><!-- /milling tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: チップ式フェイスミル ===== -->
+<!-- ================================================================ -->
+<div id="tab_facemill" class="tab-content">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>🔵</span> チップ式フェイスミル 入力</h2>
+
+  <div class="tool-card">
+    <h4>🔨 チップ材種・形状</h4>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>チップ材種</label>
+        <select id="fm_grade" onchange="refreshFM()">
+          <option value="P10">P10 (鋼・高速)</option>
+          <option value="P20" selected>P20 (鋼・汎用)</option>
+          <option value="P30">P30 (鋼・強断続)</option>
+          <option value="M10">M10 (SUS・高速)</option>
+          <option value="M20">M20 (SUS・汎用)</option>
+          <option value="K10">K10 (鋳鉄・高速)</option>
+          <option value="K20">K20 (鋳鉄・汎用)</option>
+          <option value="N10">N10 (アルミ・高速)</option>
+          <option value="S10">S10 (耐熱合金)</option>
+          <option value="H10">H10 (焼入鋼・CBN相当)</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>アプローチ角 κr <span class="unit-tag">[°]</span> <span class="tip" data-tip="κr=45°は汎用。κr=90°は深い段付き加工。κr=45°以下は送り増大可。高送りチップはκr=10〜15°">?</span></label>
+        <select id="fm_kr" onchange="refreshFM()">
+          <option value="90">90° (スクエア形)</option>
+          <option value="75">75°</option>
+          <option value="45" selected>45° (汎用標準)</option>
+          <option value="30">30°</option>
+          <option value="15">15° (高送り)</option>
+          <option value="10">10° (超高送り)</option>
+        </select>
+      </div>
+    </div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>チップブレーカ / ノーズR <span class="unit-tag">[mm]</span></label>
+        <select id="fm_nose" onchange="refreshFM()">
+          <option value="0.4">Rε=0.4 (仕上げ)</option>
+          <option value="0.8" selected>Rε=0.8 (標準)</option>
+          <option value="1.2">Rε=1.2 (中荒)</option>
+          <option value="2.0">Rε=2.0 (荒加工)</option>
+          <option value="W">ワイパーチップ（鏡面送り）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>カッタボディ径 D <span class="unit-tag">[mm]</span></label>
+        <input type="number" id="fm_D" step="1" placeholder="100" oninput="refreshFM()">
+      </div>
+    </div>
+    <div class="tool-desc-panel" id="fm_tool_desc"></div>
+  </div>
+
+  <div class="mach-card">
+    <h4>🏭 機械スペック</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>主軸出力 Pm <span class="unit-tag">[kW]</span></label>
+        <input type="number" id="fm_motor" value="15" step="0.5" oninput="refreshFM()">
+      </div>
+      <div class="input-group">
+        <label>伝達効率 η</label>
+        <input type="number" id="fm_eta" value="0.80" step="0.01" oninput="refreshFM()">
+      </div>
+      <div class="input-group">
+        <label>主軸最高回転 <span class="unit-tag">[rpm]</span></label>
+        <input type="number" id="fm_nmax" value="6000" step="500" oninput="refreshFM()">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">切削条件</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>刃数 Z</label>
+      <input type="number" id="fm_Z" value="8" step="1" oninput="refreshFM()">
+    </div>
+    <div class="input-group">
+      <label>被削材</label>
+      <select id="fm_mat" onchange="refreshFM()">
+        <option value="al">アルミ合金</option>
+        <option value="steel" selected>S45C / SS400</option>
+        <option value="steel_h">SCM440 (HRC30)</option>
+        <option value="steel_hh">SKD11 (HRC55)</option>
+        <option value="sus304">SUS304</option>
+        <option value="cast">鋳鉄 FC250</option>
+        <option value="ti">Ti-6Al-4V</option>
+        <option value="ni">Inconel 718</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>軸方向切込み ap <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="fm_ap" value="2" step="0.1" oninput="refreshFM()">
+    </div>
+    <div class="input-group">
+      <label>径方向切込み ae <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="fm_ae" value="80" step="1" oninput="refreshFM()">
+      <div class="hint">※D以下。面削り標準: ae=0.6〜0.75D</div>
+    </div>
+  </div>
+  <div class="three-col">
+    <div class="input-group">
+      <label>切削速度 Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="fm_Vc" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>確定 fz ★自動 <span class="unit-tag">[mm/刃]</span></label>
+      <input id="fm_fz" readonly>
+    </div>
+    <div class="input-group">
+      <label>加工幅 × 長さ <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="fm_L" value="200" step="1" placeholder="加工長さ">
+    </div>
+  </div>
+
+  <div id="fm_phys_panel" class="phys-panel ok">
+    <h4>📐 リアルタイム物理解析</h4>
+    <div class="phys-grid" id="fm_phys_grid"></div>
+    <div class="verdict ok" id="fm_verdict">カッタ径を入力してください</div>
+  </div>
+  <button class="calc-btn disabled-btn" id="fm_btn" onclick="calcFM()">🔵 フェイスミル条件計算</button>
+</div>
+
+<div class="card">
+  <h2 class="card-title"><span>💡</span> フェイスミル 結果・解析</h2>
+  <div id="fm_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 チップ式フェイスミル 物理根拠</h4>
+    <div id="fm_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示</p></div>
+  </div>
+  <div id="fm_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="fm_rh">
+      <div class="res-grid" id="fm_rg"></div>
+    </div>
+    <div id="fm_warns"></div>
+    <div class="fml-box"><h4>📐 計算式詳細</h4><code id="fm_fml"></code></div>
+  </div>
+</div>
+</div>
+</div><!-- /facemill tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: チップ式エンドミル ===== -->
+<!-- ================================================================ -->
+<div id="tab_indexable" class="tab-content">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>🟠</span> チップ式エンドミル（インデキサブル）入力</h2>
+
+  <div class="tool-card">
+    <h4>🔨 チップ設定</h4>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>チップ材種</label>
+        <select id="ie_grade" onchange="refreshIE()">
+          <option value="P10">P10 高速鋼加工用</option>
+          <option value="P20" selected>P20 汎用鋼加工</option>
+          <option value="P30">P30 強断続</option>
+          <option value="M20">M20 SUS汎用</option>
+          <option value="K20">K20 鋳鉄汎用</option>
+          <option value="N10">N10 アルミ高速</option>
+          <option value="S20">S20 耐熱合金</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>チップ形状</label>
+        <select id="ie_shape" onchange="refreshIE()">
+          <option value="sq">スクエア（肩削り）</option>
+          <option value="rd" selected>ラジアス（コーナR付き）</option>
+          <option value="ball">ボール</option>
+        </select>
+      </div>
+    </div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>アプローチ角 κr <span class="unit-tag">[°]</span></label>
+        <select id="ie_kr" onchange="refreshIE()">
+          <option value="90">90°</option>
+          <option value="45" selected>45°</option>
+          <option value="30">30°</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>コーナR / ノーズR <span class="unit-tag">[mm]</span></label>
+        <select id="ie_re" onchange="refreshIE()">
+          <option value="0.4">0.4</option>
+          <option value="0.8" selected>0.8</option>
+          <option value="1.2">1.2</option>
+          <option value="2.0">2.0</option>
+          <option value="4.0">4.0</option>
+          <option value="6.0">6.0</option>
+        </select>
+      </div>
+    </div>
+    <div class="tool-desc-panel" id="ie_tool_desc"></div>
+  </div>
+
+  <div class="mach-card">
+    <h4>🏭 機械スペック</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>主軸出力 Pm <span class="unit-tag">[kW]</span></label>
+        <input type="number" id="ie_motor" value="11" step="0.5" oninput="refreshIE()">
+      </div>
+      <div class="input-group">
+        <label>伝達効率 η</label>
+        <input type="number" id="ie_eta" value="0.80" step="0.01" oninput="refreshIE()">
+      </div>
+      <div class="input-group">
+        <label>主軸最高回転 <span class="unit-tag">[rpm]</span></label>
+        <input type="number" id="ie_nmax" value="8000" step="500" oninput="refreshIE()">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">工具形状・切込み</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>工具径 D <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="ie_D" step="1" placeholder="25" oninput="refreshIE()">
+    </div>
+    <div class="input-group">
+      <label>刃数 Z</label>
+      <input type="number" id="ie_Z" value="2" step="1" oninput="refreshIE()">
+      <div class="hint">インデキサブルは2〜5刃が一般的</div>
+    </div>
+    <div class="input-group">
+      <label>被削材</label>
+      <select id="ie_mat" onchange="refreshIE()">
+        <option value="al">アルミ合金</option>
+        <option value="steel" selected>S45C / SS400</option>
+        <option value="steel_h">SCM440 (HRC30)</option>
+        <option value="sus304">SUS304</option>
+        <option value="cast">鋳鉄 FC250</option>
+        <option value="ti">Ti-6Al-4V</option>
+        <option value="ni">Inconel 718</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>加工区分</label>
+      <select id="ie_proc" onchange="refreshIE()">
+        <option value="rough">荒加工</option>
+        <option value="semi">中仕上げ</option>
+        <option value="finish">仕上げ</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>ap <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="ie_ap" value="3" step="0.1" oninput="refreshIE()">
+    </div>
+    <div class="input-group">
+      <label>ae <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="ie_ae" value="15" step="0.5" oninput="refreshIE()">
+    </div>
+    <div class="input-group">
+      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="ie_Vc" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>確定 fz ★自動 <span class="unit-tag">[mm/刃]</span></label>
+      <input id="ie_fz" readonly>
+    </div>
+  </div>
+
+  <div id="ie_phys_panel" class="phys-panel ok">
+    <h4>📐 リアルタイム物理解析</h4>
+    <div class="phys-grid" id="ie_phys_grid"></div>
+    <div class="verdict ok" id="ie_verdict">工具径を入力してください</div>
+  </div>
+  <button class="calc-btn disabled-btn" id="ie_btn" onclick="calcIE()">🟠 インデキサブル条件計算</button>
+</div>
+
+<div class="card">
+  <h2 class="card-title"><span>💡</span> チップ式エンドミル 結果</h2>
+  <div id="ie_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 インデキサブル エンドミル 物理根拠</h4>
+    <div id="ie_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示</p></div>
+  </div>
+  <div id="ie_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="ie_rh">
+      <div class="res-grid" id="ie_rg"></div>
+    </div>
+    <div id="ie_warns"></div>
+    <div class="fml-box"><h4>📐 計算式詳細</h4><code id="ie_fml"></code></div>
+  </div>
+</div>
+</div>
+</div><!-- /indexable tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: 高送りミル ===== -->
+<!-- ================================================================ -->
+<div id="tab_hf" class="tab-content">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>⚡</span> 高送りミル（High Feed Mill）入力</h2>
+
+  <div class="tool-card">
+    <h4>⚡ 高送りチップ設定</h4>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>アプローチ角 κr <span class="tip" data-tip="高送りの核心。κrが小さいほど切削力の軸方向成分が増えZ方向剛性で負荷を受け、fzを大幅に増加できる。標準κr=10〜15°">?</span></label>
+        <select id="hf_kr" onchange="refreshHF()">
+          <option value="17">17° (標準高送り)</option>
+          <option value="15" selected>15° (汎用高送り)</option>
+          <option value="12">12° (超高送り)</option>
+          <option value="10">10° (エクストリーム高送り)</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>チップ材種</label>
+        <select id="hf_grade" onchange="refreshHF()">
+          <option value="P10">P10</option>
+          <option value="P20" selected>P20</option>
+          <option value="P30">P30</option>
+          <option value="M20">M20 (SUS)</option>
+          <option value="K20">K20 (鋳鉄)</option>
+        </select>
+      </div>
+    </div>
+    <div class="tool-desc-panel" id="hf_tool_desc">
+      高送りミル: 小さなアプローチ角κrにより切削力のほとんどが軸方向（スピンドル軸）に作用。機械剛性を活かして極めて大きな送りを実現する革新的加工法。
+    </div>
+  </div>
+
+  <div class="mach-card">
+    <h4>🏭 機械スペック</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>主軸出力 Pm <span class="unit-tag">[kW]</span></label>
+        <input type="number" id="hf_motor" value="11" step="0.5" oninput="refreshHF()">
+      </div>
+      <div class="input-group">
+        <label>伝達効率 η</label>
+        <input type="number" id="hf_eta" value="0.82" step="0.01" oninput="refreshHF()">
+      </div>
+      <div class="input-group">
+        <label>主軸最高回転 <span class="unit-tag">[rpm]</span></label>
+        <input type="number" id="hf_nmax" value="8000" step="500" oninput="refreshHF()">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">切削条件</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>カッタ径 D <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="hf_D" step="1" placeholder="25" oninput="refreshHF()">
+    </div>
+    <div class="input-group">
+      <label>刃数 Z</label>
+      <input type="number" id="hf_Z" value="4" step="1" oninput="refreshHF()">
+    </div>
+    <div class="input-group">
+      <label>被削材</label>
+      <select id="hf_mat" onchange="refreshHF()">
+        <option value="al">アルミ合金</option>
+        <option value="steel" selected>S45C / SS400</option>
+        <option value="steel_h">SCM440 (HRC30)</option>
+        <option value="steel_hh">SKD11 (HRC55)</option>
+        <option value="sus304">SUS304</option>
+        <option value="cast">鋳鉄 FC250</option>
+        <option value="ti">Ti-6Al-4V</option>
+        <option value="ni">Inconel 718</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>加工区分</label>
+      <select id="hf_proc" onchange="refreshHF()">
+        <option value="rough">荒加工</option>
+        <option value="semi">中仕上げ</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>ap_max <span class="unit-tag">[mm]</span> <span class="tip" data-tip="高送りミルのap上限は通常0.5〜2mm。ap増大より送り速度増大が特長">?</span></label>
+      <input type="number" id="hf_ap" value="1.0" step="0.1" oninput="refreshHF()">
+      <div class="hint">高送りミルは薄切り深さ+超高送りが特長</div>
+    </div>
+    <div class="input-group">
+      <label>ae <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="hf_ae" value="20" step="1" oninput="refreshHF()">
+    </div>
+    <div class="input-group">
+      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="hf_Vc" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>高送り fz ★自動 <span class="unit-tag">[mm/刃]</span></label>
+      <input id="hf_fz" readonly>
+      <div class="hint">通常エンドミルの3〜8倍の送りを実現</div>
+    </div>
+  </div>
+
+  <div class="highlight-box">
+    <h4>⚡ 高送りの物理的根拠</h4>
+    <div id="hf_kr_explain" style="font-size:11px;color:var(--txt2);line-height:1.7">
+      κrを選択すると、切削力の軸方向成分比と送り増幅係数が表示されます。
+    </div>
+  </div>
+
+  <div id="hf_phys_panel" class="phys-panel ok">
+    <h4>📐 高送り物理解析</h4>
+    <div class="phys-grid" id="hf_phys_grid"></div>
+    <div class="verdict ok" id="hf_verdict">工具径を入力してください</div>
+  </div>
+  <button class="calc-btn disabled-btn" id="hf_btn" onclick="calcHF()">⚡ 高送り条件計算</button>
+</div>
+
+<div class="card">
+  <h2 class="card-title"><span>💡</span> 高送りミル 結果・解析</h2>
+  <div id="hf_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 高送りミル 物理根拠</h4>
+    <div id="hf_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示</p></div>
+  </div>
+  <div id="hf_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="hf_rh">
+      <div class="res-grid" id="hf_rg"></div>
+    </div>
+    <div id="hf_warns"></div>
+    <div class="fml-box"><h4>📐 高送り計算式詳細</h4><code id="hf_fml"></code></div>
+  </div>
+</div>
+</div>
+</div><!-- /hf tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: ドリル ===== -->
+<!-- ================================================================ -->
+<div id="tab_drilling" class="tab-content">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>🔩</span> ドリル加工 入力</h2>
+
+  <div class="tool-card">
+    <h4>🔨 ドリル種別・材質</h4>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>ドリル種別</label>
+        <select id="d_type" onchange="refreshD()">
+          <option value="std" selected>標準ドリル (先端角118°)</option>
+          <option value="sharp">シャープポイント (先端角130°)</option>
+          <option value="inco">インコネル用 (先端角140°)</option>
+          <option value="spot">スポットドリル</option>
+          <option value="indexable">インデキサブルドリル（チップ式）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>ドリル材質</label>
+        <select id="d_tool" onchange="refreshD()">
+          <option value="hss">高速度鋼 HSS</option>
+          <option value="cobalt">コバルトハイス</option>
+          <option value="carbide" selected>超硬合金 ソリッド</option>
+          <option value="coated">TiAlNコーティング超硬</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- スルースピンドルクーラント -->
+    <div class="section-title">💧 スルースピンドルクーラント（TSC）</div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>TSC設定 <span class="tip" data-tip="スルースピンドルクーラントはドリル内部から直接切削点に高圧クーラントを供給。切りくず排出改善・工具寿命延長・深穴でのペック不要化に絶大な効果">?</span></label>
+        <select id="d_tsc" onchange="refreshD()">
+          <option value="none">なし（外部クーラント/ドライ）</option>
+          <option value="low">TSC 低圧 (2〜5 MPa)</option>
+          <option value="mid" selected>TSC 中圧 (7〜10 MPa)</option>
+          <option value="high">TSC 高圧 (20〜40 MPa)</option>
+          <option value="mql">MQL（最小量潤滑）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>クーラント圧力 <span class="unit-tag">[MPa]</span></label>
+        <input type="number" id="d_tsc_p" value="7" step="0.5" oninput="refreshD()">
+        <div class="hint">TSC非選択時は無視されます</div>
+      </div>
+    </div>
+    <div class="tool-desc-panel" id="d_tool_desc"></div>
+  </div>
+
+  <div class="mach-card">
+    <h4>🏭 機械スペック</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>主軸出力 Pm <span class="unit-tag">[kW]</span></label>
+        <input type="number" id="d_motor" value="5.5" step="0.5" oninput="refreshD()">
+      </div>
+      <div class="input-group">
+        <label>伝達効率 η</label>
+        <input type="number" id="d_eta" value="0.80" step="0.01" oninput="refreshD()">
+      </div>
+      <div class="input-group">
+        <label>最大トルク <span class="unit-tag">[N·m]</span></label>
+        <input type="number" id="d_torque_max" value="50" step="1" oninput="refreshD()">
+        <div class="hint">主軸仕様から入力（重要）</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">加工条件</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>ドリル径 D <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="d_D" step="0.1" placeholder="10" oninput="refreshD()">
+    </div>
+    <div class="input-group">
+      <label>穴深さ L <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="d_L" value="30" step="0.5" oninput="refreshD()">
+    </div>
+    <div class="input-group">
+      <label>被削材</label>
+      <select id="d_mat" onchange="refreshD()">
+        <option value="al">アルミ合金</option>
+        <option value="steel" selected>S45C / SS400</option>
+        <option value="sus304">SUS304</option>
+        <option value="cast">鋳鉄 FC250</option>
+        <option value="ti">Ti-6Al-4V</option>
+        <option value="ni">Inconel 718</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>加工区分</label>
+      <select id="d_proc" onchange="refreshD()">
+        <option value="rough">荒加工</option>
+        <option value="finish">仕上げ</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>穴数</label>
+      <input type="number" id="d_holes" value="1" step="1">
+    </div>
+    <div class="input-group">
+      <label>下穴の有無 <span class="tip" data-tip="下穴あり(パイロット穴)の場合、実質切削幅=(D-d_pilot)/2となりトルクが大幅低減">?</span></label>
+      <select id="d_pilot" onchange="refreshD()">
+        <option value="0">なし（ソリッド）</option>
+        <option value="1">あり（下穴径を入力）</option>
+      </select>
+    </div>
+    <div class="input-group" id="d_pilot_d_grp" style="display:none">
+      <label>下穴径 d_pilot <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="d_pilot_d" step="0.1" placeholder="下穴径" oninput="refreshD()">
+    </div>
+    <div class="input-group">
+      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="d_Vc" class="f-auto" readonly>
+    </div>
+  </div>
+  <div class="option-grid">
+    <div class="input-group">
+      <label>物理上限 f_max ★自動 <span class="unit-tag">[mm/rev]</span></label>
+      <input id="d_fmax" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>確定 f ★自動 <span class="unit-tag">[mm/rev]</span></label>
+      <input id="d_f" readonly>
+    </div>
+  </div>
+
+  <!-- TSC情報パネル -->
+  <div class="highlight-box" id="d_tsc_panel">
+    <h4>💧 TSC効果解析</h4>
+    <div id="d_tsc_info" style="font-size:11px;color:var(--txt2);line-height:1.7">TSC設定を変更すると詳細が表示されます</div>
+  </div>
+
+  <div id="d_phys_panel" class="phys-panel ok">
+    <h4>📐 リアルタイム物理解析</h4>
+    <div class="phys-grid" id="d_phys_grid"></div>
+    <div class="dual-bar">
+      <div class="bar-group">
+        <label>機械負荷率</label>
+        <div class="bar-wrap"><div class="bar-fill" id="d_bar_load" style="width:0%"><span id="d_pct_load">0%</span></div></div>
+      </div>
+      <div class="bar-group">
+        <label>ドリルねじり応力比</label>
+        <div class="bar-wrap"><div class="bar-fill" id="d_bar_stress" style="width:0%"><span id="d_pct_stress">0%</span></div></div>
+      </div>
+    </div>
+    <div class="verdict ok" id="d_verdict">ドリル径を入力してください</div>
+  </div>
+  <button class="calc-btn disabled-btn" id="d_btn" onclick="calcD()">🔩 ドリル条件計算</button>
+</div>
+
+<div class="card">
+  <h2 class="card-title"><span>💡</span> ドリル結果・解析</h2>
+  <div id="d_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 ドリル加工 物理根拠</h4>
+    <div id="d_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示</p></div>
+  </div>
+  <div id="d_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="d_rh">
+      <div class="res-grid" id="d_rg"></div>
+    </div>
+    <div id="d_warns"></div>
+    <div class="fml-box"><h4>📐 計算式詳細</h4><code id="d_fml"></code></div>
+  </div>
+</div>
+</div>
+</div><!-- /drilling tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: 旋盤 ===== -->
+<!-- ================================================================ -->
+<div id="tab_turning" class="tab-content">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>🔄</span> 旋盤加工 入力</h2>
+
+  <div class="tool-card">
+    <h4>🔨 工具材質・チップ設定</h4>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>工具材質</label>
+        <select id="t_tool" onchange="refreshT()">
+          <option value="hss">高速度鋼 HSS</option>
+          <option value="carbide" selected>超硬合金</option>
+          <option value="coated">AlTiNコーティング超硬</option>
+          <option value="cermet">サーメット</option>
+          <option value="cbn">CBN（焼入鋼専用）</option>
+          <option value="pcd">PCD（アルミ専用）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>アプローチ角 κr <span class="unit-tag">[°]</span></label>
+        <select id="t_kr" onchange="refreshT()">
+          <option value="93">93° (PCLNR型・標準)</option>
+          <option value="75" selected>75° (DCLNR型)</option>
+          <option value="60">60° (三角)</option>
+          <option value="45">45° (低切削力)</option>
+          <option value="30">30° (仕上げ特化)</option>
+        </select>
+      </div>
+    </div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>ノーズR rε <span class="unit-tag">[mm]</span></label>
+        <select id="t_re" onchange="refreshT()">
+          <option value="0.2">0.2 (精密仕上げ)</option>
+          <option value="0.4">0.4 (仕上げ)</option>
+          <option value="0.8" selected>0.8 (標準)</option>
+          <option value="1.2">1.2 (中荒)</option>
+          <option value="2.4">2.4 (荒加工)</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>切削方式</label>
+        <select id="t_mode" onchange="refreshT()">
+          <option value="ext" selected>外径切削</option>
+          <option value="int">内径切削</option>
+          <option value="face">端面切削</option>
+          <option value="thr">ねじ切り</option>
+          <option value="groove">溝入れ</option>
+        </select>
+      </div>
+    </div>
+    <div class="tool-desc-panel" id="t_tool_desc"></div>
+  </div>
+
+  <div class="mach-card">
+    <h4>🏭 機械スペック</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>主軸出力 Pm <span class="unit-tag">[kW]</span></label>
+        <input type="number" id="t_motor" value="11" step="0.5" oninput="refreshT()">
+      </div>
+      <div class="input-group">
+        <label>伝達効率 η</label>
+        <input type="number" id="t_eta" value="0.80" step="0.01" oninput="refreshT()">
+      </div>
+      <div class="input-group">
+        <label>最大トルク <span class="unit-tag">[N·m]</span></label>
+        <input type="number" id="t_torque_max" value="200" step="5" oninput="refreshT()">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">加工条件</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>ワーク径 D <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="t_D" step="0.1" placeholder="50" oninput="refreshT()">
+    </div>
+    <div class="input-group">
+      <label>加工長さ L <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="t_L" value="100" step="1">
+    </div>
+    <div class="input-group">
+      <label>被削材</label>
+      <select id="t_mat" onchange="refreshT()">
+        <option value="al">アルミ合金</option>
+        <option value="al7075">A7075 超ジュラルミン</option>
+        <option value="steel" selected>S45C / SS400</option>
+        <option value="steel_h">SCM440 (HRC30)</option>
+        <option value="steel_hh">SKD11 (HRC55)</option>
+        <option value="sus304">SUS304</option>
+        <option value="sus316">SUS316L</option>
+        <option value="cast">鋳鉄 FC250</option>
+        <option value="ti">Ti-6Al-4V</option>
+        <option value="ni">Inconel 718</option>
+        <option value="cu">銅合金 C3604</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>加工区分</label>
+      <select id="t_proc" onchange="refreshT()">
+        <option value="rough">荒加工</option>
+        <option value="semi">中仕上げ</option>
+        <option value="finish">仕上げ</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>切込み ap <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="t_ap" value="2" step="0.1" oninput="refreshT()">
+    </div>
+    <div class="input-group">
+      <label>パス数</label>
+      <input type="number" id="t_pass" value="1" step="1">
+    </div>
+    <div class="input-group">
+      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="t_Vc" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>確定 f ★自動 <span class="unit-tag">[mm/rev]</span></label>
+      <input id="t_f" readonly>
+    </div>
+  </div>
+
+  <!-- 理論面粗さ計算 -->
+  <div class="highlight-box">
+    <h4>📐 理論面粗さ自動計算 (Rz理論値)</h4>
+    <div id="t_roughness_panel" style="font-size:11px;color:var(--txt2);line-height:1.8">
+      ノーズRと送りから自動計算: Rz = f²/(8×rε) [mm]<br>
+      <span id="t_roughness_val" style="color:#ffd700;font-size:14px;font-weight:700">入力値待ち</span>
+    </div>
+  </div>
+
+  <div id="t_phys_panel" class="phys-panel ok">
+    <h4>📐 リアルタイム物理解析</h4>
+    <div class="phys-grid" id="t_phys_grid"></div>
+    <div class="dual-bar">
+      <div class="bar-group">
+        <label>機械負荷率</label>
+        <div class="bar-wrap"><div class="bar-fill" id="t_bar_load" style="width:0%"><span id="t_pct_load">0%</span></div></div>
+      </div>
+      <div class="bar-group">
+        <label>工具応力比</label>
+        <div class="bar-wrap"><div class="bar-fill" id="t_bar_stress" style="width:0%"><span id="t_pct_stress">0%</span></div></div>
+      </div>
+    </div>
+    <div class="verdict ok" id="t_verdict">ワーク径を入力してください</div>
+  </div>
+  <button class="calc-btn disabled-btn" id="t_btn" onclick="calcT()">🔄 旋盤条件計算</button>
+</div>
+
+<div class="card">
+  <h2 class="card-title"><span>💡</span> 旋盤 結果・解析</h2>
+  <div id="t_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 旋盤加工 物理根拠</h4>
+    <div id="t_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示</p></div>
+  </div>
+  <div id="t_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="t_rh">
+      <div class="res-grid" id="t_rg"></div>
+    </div>
+    <div id="t_warns"></div>
+    <div class="fml-box"><h4>📐 計算式詳細</h4><code id="t_fml"></code></div>
+  </div>
+</div>
+</div>
+</div><!-- /turning tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: タップ加工 ===== -->
+<!-- ================================================================ -->
+<div id="tab_tap" class="tab-content">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>🔴</span> タップ加工 入力</h2>
+
+  <!-- ねじ規格 -->
+  <div class="tool-card">
+    <h4>🔩 ねじ規格・タップ選択</h4>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>ねじ規格 <span class="unit-tag">(M並目/細目・UNC/UNF・管用G/Rc)</span></label>
+        <select id="tap_thread" onchange="refreshTap()">
+          <!-- populateTapThreads() がJSで自動生成 -->
+        </select>
+      </div>
+      <div class="input-group">
+        <label>タップ種別</label>
+        <select id="tap_type" onchange="refreshTap()">
+          <optgroup label="一般ねじ用 (M / UNC / UNF)">
+            <option value="spiral" selected>スパイラルタップ（止まり穴標準）</option>
+            <option value="point">ポイントタップ（貫通穴高速）</option>
+            <option value="str">ストレートフルート（精密加工）</option>
+            <option value="form">盛上げタップ（切りくずゼロ）</option>
+          </optgroup>
+          <optgroup label="管用平行ねじ用 (G / PF)">
+            <option value="pipe_str">管用平行タップ（ストレート）</option>
+            <option value="pipe_sp">管用平行タップ（スパイラル）</option>
+          </optgroup>
+          <optgroup label="管用テーパねじ用 (Rc / PT)">
+            <option value="pipe_taper">管用テーパタップ</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>タップ材質</label>
+        <select id="tap_tool" onchange="refreshTap()">
+          <option value="hss" selected>高速度鋼 HSS</option>
+          <option value="cobalt">コバルトハイス Co-HSS</option>
+          <option value="carbide">超硬合金ソリッド</option>
+          <option value="coated">AlTiNコーティング超硬</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>被削材</label>
+        <select id="tap_mat" onchange="refreshTap()">
+          <option value="al">アルミ合金 (A2017/5052)</option>
+          <option value="al7075">A7075 超ジュラルミン</option>
+          <option value="steel" selected>S45C / SS400</option>
+          <option value="steel_h">SCM440 合金鋼 (HRC30)</option>
+          <option value="steel_hh">SKD11 焼入鋼 (HRC55)</option>
+          <option value="sus304">SUS304 ステンレス</option>
+          <option value="sus316">SUS316L</option>
+          <option value="cast">鋳鉄 FC250</option>
+          <option value="ti">Ti-6Al-4V チタン</option>
+          <option value="ni">Inconel 718</option>
+          <option value="cu">銅合金 C3604</option>
+        </select>
+      </div>
+    </div>
+    <div class="tool-desc-panel" id="tap_tool_desc"></div>
+  </div>
+
+  <!-- 機械・加工設定 -->
+  <div class="mach-card">
+    <h4>🏭 機械・加工設定</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>タッピング方式</label>
+        <select id="tap_mode" onchange="refreshTap()">
+          <option value="rigid" selected>剛性タッピング（同期タップ）</option>
+          <option value="float">フロートタッピング（非同期）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>クーラント</label>
+        <select id="tap_cool" onchange="refreshTap()">
+          <option value="ext" selected>外部クーラント（切削油）</option>
+          <option value="dry">ドライ / エアーブロー</option>
+          <option value="tsc">内部高圧クーラント</option>
+          <option value="mql">MQL（最小量潤滑）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>主軸最高回転 <span class="unit-tag">[rpm]</span></label>
+        <input type="number" id="tap_nmax" value="6000" step="500" oninput="refreshTap()">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">穴・ねじ諸元</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>穴種別</label>
+      <select id="tap_hole" onchange="refreshTap()">
+        <option value="through" selected>貫通穴</option>
+        <option value="blind">止まり穴</option>
+      </select>
+    </div>
+    <div class="input-group" id="tap_depth_grp">
+      <label>穴深さ L <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="tap_depth" value="20" step="0.5" oninput="refreshTap()">
+    </div>
+    <div class="input-group">
+      <label>ねじ有効深さ Le <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="tap_le" value="12" step="0.5" oninput="refreshTap()">
+      <div class="hint">推奨: 1.5D〜2D（鋼）、1D〜1.5D（アルミ）</div>
+    </div>
+    <div class="input-group">
+      <label>穴数</label>
+      <input type="number" id="tap_holes" value="1" step="1" min="1">
+    </div>
+  </div>
+
+  <!-- 自動計算 -->
+  <div class="section-title">自動計算結果</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>推奨 Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="tap_Vc" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>主軸回転数 S ★自動 <span class="unit-tag">[rpm]</span></label>
+      <input id="tap_S" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>同期送り F ★自動 <span class="unit-tag">[mm/min]</span></label>
+      <input id="tap_F" class="f-auto" readonly>
+      <div class="hint">剛性タップ: F = S × P（必須）</div>
+    </div>
+    <div class="input-group">
+      <label>ピッチ P <span class="unit-tag">[mm]</span></label>
+      <input id="tap_P" class="f-auto" readonly>
+    </div>
+  </div>
+
+  <!-- 下穴径推奨 -->
+  <div class="highlight-box">
+    <h4>🔩 下穴径推奨（M/UN: JIS B 0209・ISO 724 / 管用: JIS B 0202・0203）</h4>
+    <div id="tap_pilot_panel" style="font-size:11px;color:var(--txt2);line-height:2.0">ねじ規格を選択すると表示されます</div>
+  </div>
+
+  <!-- 物理解析 -->
+  <div id="tap_phys_panel" class="phys-panel ok">
+    <h4>📐 タッピングトルク解析</h4>
+    <div class="phys-grid" id="tap_phys_grid"></div>
+    <div class="dual-bar">
+      <div class="bar-group">
+        <label>トルク安全率 (Tm/T_break)</label>
+        <div class="bar-wrap"><div class="bar-fill" id="tap_bar_torq" style="width:0%"><span id="tap_pct_torq">0%</span></div></div>
+      </div>
+      <div class="bar-group">
+        <label>推奨速度域</label>
+        <div class="bar-wrap"><div class="bar-fill" id="tap_bar_vc" style="width:50%;background:#22c55e"><span id="tap_pct_vc">適正</span></div></div>
+      </div>
+    </div>
+    <div class="verdict ok" id="tap_verdict">ねじ規格と材料を選択してください</div>
+  </div>
+  <button class="calc-btn enabled" id="tap_btn" onclick="calcTap()">🔴 タップ条件を計算する</button>
+</div>
+
+<!-- RIGHT: 結果パネル -->
+<div class="card">
+  <h2 class="card-title"><span>💡</span> タップ加工 結果・解析</h2>
+
+  <div id="tap_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 タップ加工 物理根拠</h4>
+    <div id="tap_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示されます</p></div>
+  </div>
+
+  <div id="tap_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="tap_rh">
+      <div class="res-grid" id="tap_rg"></div>
+    </div>
+    <div id="tap_warns"></div>
+    <div class="fml-box"><h4>📐 全計算式詳細ログ</h4><code id="tap_fml"></code></div>
+  </div>
+</div>
+</div>
+</div><!-- /tap tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: 条件比較 ===== -->
+<!-- ================================================================ -->
+<div id="tab_compare" class="tab-content">
+<div class="card">
+  <h2 class="card-title"><span>📊</span> 加工条件比較・MRR最大化解析</h2>
+  <p style="font-size:11px;color:var(--txt2);margin-bottom:14px">各タブで計算を実行すると、こちらに結果が蓄積されます。材料除去率(MRR)・切削時間・消費電力を比較します。</p>
+  <div id="compare_table"><p style="color:var(--txt3);font-size:12px">各タブで計算を実行してください</p></div>
+</div>
+</div>
+
+</div><!-- /container -->
+
+<!-- ================================================================
+     JAVASCRIPT
+================================================================ -->
+<script>
+'use strict';
+
+/* ================================================================
+   【超拡張版】材料データベース
+   Ks1 [N/mm²], mc [-], Taylor係数 C・n (T=C/Vc^(1/n))
+   比熱 cp [J/kg·K], 熱伝導λ [W/m·K], HB硬度
+================================================================ */
+const MAT = {
+  al:      {name:'アルミ合金 A2017',  Ks1:700,  mc:0.25, C_T:600,  n_T:5.0, cp:900,  lam:140, HB:95,
+            vcM:{rough:120,semi:160,finish:200}, vcD:{rough:80,finish:60},  vcT:{rough:100,semi:150,finish:200}},
+  al7075:  {name:'A7075超ジュラルミン',Ks1:780, mc:0.25, C_T:550,  n_T:5.0, cp:870,  lam:130, HB:150,
+            vcM:{rough:100,semi:140,finish:180}, vcD:{rough:70,finish:55},  vcT:{rough:90,semi:130,finish:170}},
+  steel:   {name:'S45C / SS400',     Ks1:2100, mc:0.26, C_T:200,  n_T:3.5, cp:490,  lam:48,  HB:180,
+            vcM:{rough:50,semi:70,finish:90},   vcD:{rough:35,finish:28},  vcT:{rough:55,semi:80,finish:110}},
+  steel_h: {name:'SCM440 HRC30',     Ks1:2500, mc:0.27, C_T:150,  n_T:3.0, cp:480,  lam:42,  HB:290,
+            vcM:{rough:20,semi:30,finish:45},   vcD:{rough:18,finish:14},  vcT:{rough:25,semi:40,finish:55}},
+  steel_hh:{name:'SKD11 HRC55',      Ks1:3200, mc:0.28, C_T:80,   n_T:2.5, cp:460,  lam:38,  HB:580,
+            vcM:{rough:8, semi:12,finish:18},   vcD:{rough:6, finish:5},   vcT:{rough:10,semi:15,finish:22}},
+  sus304:  {name:'SUS304',           Ks1:2800, mc:0.30, C_T:120,  n_T:3.0, cp:500,  lam:16,  HB:170,
+            vcM:{rough:25,semi:38,finish:50},   vcD:{rough:18,finish:14},  vcT:{rough:28,semi:42,finish:60}},
+  sus316:  {name:'SUS316L',          Ks1:2900, mc:0.31, C_T:110,  n_T:2.8, cp:500,  lam:15,  HB:165,
+            vcM:{rough:22,semi:33,finish:45},   vcD:{rough:15,finish:12},  vcT:{rough:24,semi:36,finish:52}},
+  cast:    {name:'鋳鉄 FC250',        Ks1:1100, mc:0.22, C_T:300,  n_T:4.0, cp:460,  lam:50,  HB:210,
+            vcM:{rough:35,semi:50,finish:65},   vcD:{rough:30,finish:25},  vcT:{rough:40,semi:60,finish:80}},
+  ti:      {name:'Ti-6Al-4V',        Ks1:2000, mc:0.28, C_T:100,  n_T:2.5, cp:560,  lam:7,   HB:300,
+            vcM:{rough:10,semi:15,finish:20},   vcD:{rough:8, finish:6},   vcT:{rough:12,semi:18,finish:25}},
+  ni:      {name:'Inconel 718',      Ks1:3500, mc:0.35, C_T:60,   n_T:2.0, cp:430,  lam:11,  HB:350,
+            vcM:{rough:6, semi:9, finish:12},   vcD:{rough:5, finish:4},   vcT:{rough:8, semi:12,finish:16}},
+  cu:      {name:'銅合金 C3604',      Ks1:600,  mc:0.20, C_T:700,  n_T:5.5, cp:380,  lam:120, HB:80,
+            vcM:{rough:150,semi:200,finish:250},vcD:{rough:100,finish:80}, vcT:{rough:120,semi:180,finish:240}},
+  cfrp:    {name:'CFRP',             Ks1:500,  mc:0.15, C_T:400,  n_T:4.0, cp:900,  lam:8,   HB:45,
+            vcM:{rough:80,semi:120,finish:180}, vcD:{rough:60,finish:50},  vcT:{rough:80,semi:120,finish:160}},
+};
+
+/* ================================================================
+   工具材質データベース（拡張版）
+================================================================ */
+const TOOL = {
+  hss:    {name:'HSS',        vcF:1.00,sigma:380,rho:1.00,E:210000,desc:'汎用・靭性最高。耐熱600℃。断続◎',chips:['Vc低め','靭性◎','衝撃◎']},
+  cobalt: {name:'Co-HSS',    vcF:1.20,sigma:440,rho:1.00,E:215000,desc:'耐熱650℃。難削材に有効。靭性◎',chips:['Vc中','靭性◎','耐熱+']},
+  carbide:{name:'Carbide',   vcF:2.00,sigma:520,rho:0.60,E:550000,desc:'耐摩耗◎。脆性あり。耐熱800℃',chips:['Vc高','耐摩耗◎','脆性注意']},
+  altin:  {name:'AlTiN超硬', vcF:2.60,sigma:500,rho:0.55,E:530000,desc:'高速乾式◎。耐熱900℃。脆性注意',chips:['Vc最高','乾式◎','耐熱◎']},
+  altisiN:{name:'AlTiSiN',   vcF:2.80,sigma:490,rho:0.52,E:520000,desc:'耐熱1000℃。Ti/Inconel有効',chips:['Vc最高','超耐熱','難削材◎']},
+  diamond:{name:'DLC/Diamond',vcF:3.20,sigma:400,rho:0.40,E:800000,desc:'アルミ専用。超低摩擦。耐衝撃×',chips:['Al専用','超低摩擦','耐衝撃×']},
+  coated: {name:'TiAlN超硬', vcF:2.40,sigma:500,rho:0.55,E:530000,desc:'汎用コーティング。耐熱900℃',chips:['Vc高','汎用','耐熱◎']},
+  cermet: {name:'サーメット', vcF:2.40,sigma:420,rho:0.45,E:400000,desc:'仕上げ専用。超低摩擦。断続×',chips:['仕上げ専用','低摩擦','断続×']},
+  cbn:    {name:'CBN',       vcF:3.50,sigma:350,rho:0.30,E:680000,desc:'焼入鋼専用。耐熱1100℃。脆性最大',chips:['焼入鋼専用','超耐熱','最脆性']},
+  pcd:    {name:'PCD',       vcF:4.00,sigma:360,rho:0.35,E:700000,desc:'アルミ/銅専用。超長寿命。Fe×',chips:['Al/Cu専用','超長寿命','Fe不可']},
+};
+
+/* ================================================================
+   チップ材種データベース (ISO P/M/K/N/S/H分類)
+================================================================ */
+const GRADE = {
+  P10:{vcF:2.60,fzF:0.85,name:'P10',desc:'鋼・高速・軽切削。仕上げ用。断続切削に注意'},
+  P20:{vcF:2.20,fzF:1.00,name:'P20',desc:'鋼・汎用。荒〜中仕上げ。最も一般的'},
+  P30:{vcF:1.80,fzF:1.15,name:'P30',desc:'鋼・強断続・深い切込み対応。靭性重視'},
+  M10:{vcF:1.90,fzF:0.85,name:'M10',desc:'SUS・高速仕上げ。耐溶着性重視'},
+  M20:{vcF:1.60,fzF:1.00,name:'M20',desc:'SUS・汎用。荒〜中仕上げ対応'},
+  K10:{vcF:2.30,fzF:0.85,name:'K10',desc:'鋳鉄・高速。アルミ兼用可'},
+  K20:{vcF:2.00,fzF:1.00,name:'K20',desc:'鋳鉄・汎用。荒〜中仕上げ'},
+  N10:{vcF:3.00,fzF:0.90,name:'N10',desc:'アルミ・銅高速切削専用。超低摩擦'},
+  S10:{vcF:1.20,fzF:0.80,name:'S10',desc:'Ti・Ni超耐熱合金用。耐溶着・耐熱性重視'},
+  S20:{vcF:1.00,fzF:0.90,name:'S20',desc:'耐熱合金汎用。S10より靭性重視'},
+  H10:{vcF:2.80,fzF:0.70,name:'H10',desc:'焼入鋼専用。硬脆性材切削。CBN相当'},
+};
+
+/* ================================================================
+   フェイスミル・インデキサブル カタログ基準 fz (mm/刃)
+================================================================ */
+const FM_FZ_CAT = {
+  al:{rough:0.20,semi:0.13,finish:0.07},
+  al7075:{rough:0.18,semi:0.12,finish:0.06},
+  steel:{rough:0.15,semi:0.10,finish:0.05},
+  steel_h:{rough:0.10,semi:0.07,finish:0.04},
+  steel_hh:{rough:0.05,semi:0.03,finish:0.02},
+  sus304:{rough:0.08,semi:0.06,finish:0.03},
+  sus316:{rough:0.07,semi:0.05,finish:0.025},
+  cast:{rough:0.18,semi:0.12,finish:0.06},
+  ti:{rough:0.05,semi:0.035,finish:0.020},
+  ni:{rough:0.03,semi:0.020,finish:0.012},
+};
+
+/* ================================================================
+   ソリッドエンドミル カタログ fz
+================================================================ */
+const M_FZ_CAT = {
+  al:{rough:0.080,semi:0.055,finish:0.030},
+  al7075:{rough:0.075,semi:0.050,finish:0.028},
+  steel:{rough:0.060,semi:0.040,finish:0.020},
+  steel_h:{rough:0.040,semi:0.028,finish:0.015},
+  steel_hh:{rough:0.015,semi:0.010,finish:0.006},
+  sus304:{rough:0.040,semi:0.028,finish:0.015},
+  sus316:{rough:0.035,semi:0.024,finish:0.013},
+  cast:{rough:0.070,semi:0.045,finish:0.025},
+  ti:{rough:0.030,semi:0.020,finish:0.012},
+  ni:{rough:0.015,semi:0.010,finish:0.006},
+  cu:{rough:0.100,semi:0.070,finish:0.040},
+  cfrp:{rough:0.060,semi:0.040,finish:0.025},
+};
+
+/* ドリル・旋盤カタログ */
+const D_F_CAT = {
+  al:{rough:0.30,finish:0.20},   steel:{rough:0.20,finish:0.15},
+  sus304:{rough:0.12,finish:0.09}, cast:{rough:0.25,finish:0.18},
+  ti:{rough:0.08,finish:0.06},   ni:{rough:0.04,finish:0.03},
+};
+const T_F_CAT = {
+  al:{rough:0.35,semi:0.22,finish:0.12},     al7075:{rough:0.32,semi:0.20,finish:0.11},
+  steel:{rough:0.28,semi:0.18,finish:0.10},  steel_h:{rough:0.20,semi:0.13,finish:0.07},
+  steel_hh:{rough:0.07,semi:0.05,finish:0.03},
+  sus304:{rough:0.18,semi:0.12,finish:0.07}, sus316:{rough:0.15,semi:0.10,finish:0.06},
+  cast:{rough:0.32,semi:0.20,finish:0.11},   ti:{rough:0.12,semi:0.08,finish:0.05},
+  ni:{rough:0.06,semi:0.04,finish:0.025},    cu:{rough:0.40,semi:0.25,finish:0.14},
+};
+
+/* ================================================================
+   物理計算ユーティリティ
+================================================================ */
+
+/* 径依存 fz カタログ補正 (小径ほど小さい送りが適正) */
+function fzDiamFactor(D) {
+  return D<=6?0.60:D<=8?0.70:D<=10?0.80:D<=16?1.00:D<=20?1.15:D<=25?1.30:D<=32?1.45:1.55;
+}
+
+function interp(x, pts) {
+  if(x<=pts[0][0]) return pts[0][1];
+  for(let i=1;i<pts.length;i++){
+    if(x<=pts[i][0]){const t=(x-pts[i-1][0])/(pts[i][0]-pts[i-1][0]);return pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t;}
+  }
+  return pts[pts.length-1][1];
+}
+
+/* OH/D補正係数 (突き出し/径比による剛性低下) */
+function ohFactor(OH, D) {
+  const r = OH/D;
+  return interp(r, [[0,1.0],[1,1.0],[2,0.95],[3,0.88],[4,0.80],[5,0.70],[6,0.60],[7,0.50],[8,0.42],[10,0.30],[12,0.22],[15,0.15]]);
+}
+
+/* 振動安定性係数 */
+function vibFactor(OH, D) {
+  const r = OH/D;
+  if(r<=2) return {stable:true, lv:'安定'};
+  if(r<=3) return {stable:true, lv:'良好'};
+  if(r<=4) return {stable:false, lv:'注意'};
+  if(r<=5) return {stable:false, lv:'高びびり危険'};
+  return {stable:false, lv:'加工困難'};
+}
+
+/* 工具断面係数 エンドミル */
+function coreRatioEM(Z) {
+  return Z<=2?0.55:Z<=3?0.60:Z<=4?0.65:0.70;
+}
+function sectionModulusEM(D, Z) {
+  const dc = D*coreRatioEM(Z);
+  return Math.PI*(Math.pow(D,4)-Math.pow(dc,4))/(32*D);
+}
+
+/* 平均切削厚さ hm (係合角厳密式)
+   h(θ)=fz·sinθ を係合区間[0,φ]で平均: hm = fz·(1-cosφ)/φ
+   ※ (1-cosφ)=2sin²(φ/2)。スロット加工(φ=π)で hm=2fz/π に一致 */
+function hmM(fz, ae, D) {
+  const r = Math.min(ae/D, 1.0);
+  const phi = Math.acos(Math.max(-1, Math.min(1, 1-2*r)));
+  if(phi<1e-9) return 0;
+  return fz*(1-Math.cos(phi))/phi;
+}
+
+/* 係合角 deg */
+function phiDeg(ae, D) {
+  return Math.acos(Math.max(-1,Math.min(1,1-2*Math.min(ae/D,1))))*180/Math.PI;
+}
+
+/* 有効刃数 */
+function Zeff(Z, ae, D) {
+  const phi = Math.acos(Math.max(-1,Math.min(1,1-2*Math.min(ae/D,1))));
+  return Z*phi/(2*Math.PI);
+}
+
+/* 1刃切削力 */
+function FcTooth(fz, ae, D, ap, mat) {
+  const hm = hmM(fz, ae, D);
+  if(hm<=0) return 0;
+  const db = MAT[mat];
+  return db.Ks1*Math.pow(hm, 1-db.mc)*ap;
+}
+
+/* 全体切削力(平均) */
+function FcTotal(fz, ae, D, ap, Z, mat) {
+  return FcTooth(fz,ae,D,ap,mat)*Zeff(Z,ae,D);
+}
+
+/* fz_max逆算 (ミリング汎用) */
+function fzMaxMilling(ae, D, ap, Z, mat, toolSigma, toolRho, Vc, Pm, eta, OH) {
+  const db = MAT[mat];
+  const P_avail = Pm*eta;
+  const Fc_motor = (P_avail*1000*60)/Vc;
+  const L_oh = OH || 3*D;
+  const Zsec = sectionModulusEM(D, Z);
+  const sigma_eff = toolSigma*toolRho;
+  const M_all = sigma_eff*Zsec;
+  // 工具曲げ制約: 全切削力の合力FcTがOHで受ける → FcT_max = M_allow/OH
+  // (誤: Fc_tool_1t*ze は工具強度をZeff倍に過大評価してしまう)
+  const Fc_tool_max = M_all/L_oh;  // 合計切削力の上限
+  const ze = Zeff(Z, ae, D);
+  const Fc_max = Math.min(Fc_motor, Fc_tool_max);
+  const C_ae = hmM(1.0, ae, D);
+  if(C_ae<=0||ze<=0) return 0;
+  const exponent = 1/(1-db.mc);
+  const rhs = Fc_max/(db.Ks1*Math.pow(C_ae,1-db.mc)*ap*ze);
+  if(rhs<=0) return 0;
+  return Math.pow(rhs, exponent);
+}
+
+/* Taylor工具寿命 T[min] = C_T / Vc^(1/n_T) */
+function taylorLife(Vc, mat) {
+  const db = MAT[mat];
+  return db.C_T / Math.pow(Vc, 1/db.n_T);
+}
+
+/* 理論面粗さ Rz [μm] */
+function theorRz(f, re) {
+  return (f*f/(8*re))*1000; // mm→μm
+}
+
+/* アプローチ角補正係数 κr → 軸方向分力比 */
+function krAxialRatio(kr_deg) {
+  const kr = kr_deg*Math.PI/180;
+  return Math.cos(kr); // 軸方向成分比
+}
+
+/* 高送りミル fz補正係数 */
+function hfFzFactor(kr_deg) {
+  // κr小さいほど大きな送りが可能
+  // 実験的データ: κr=90→×1.0, 45→×1.5, 15→×4.0, 10→×6.0
+  return interp(kr_deg, [[10,6.0],[12,5.0],[15,4.0],[17,3.2],[30,2.0],[45,1.5],[60,1.2],[90,1.0]]);
+}
+
+/* ドリル実験式トルク (N·m) */
+function drillTorque(D, f, mat) {
+  const db = MAT[mat];
+  return 0.0987*Math.pow(D,1.8)*Math.pow(f,0.8)*(db.Ks1/2100);
+}
+
+/* TSC補正係数 */
+function tscFactor(tsc) {
+  // 送り増加可能係数 / Vc増加係数 / L/D補正改善
+  const t = {
+    none:{fF:1.00, vcF:1.00, ldF:1.00, desc:'外部クーラント/ドライ。L/D>3でペック必要'},
+    mql: {fF:1.05, vcF:1.05, ldF:1.10, desc:'MQL:微量潤滑。摩擦低減。ドライに近い効果'},
+    low: {fF:1.10, vcF:1.10, ldF:1.20, desc:'TSC低圧(2〜5MPa):切りくず排出改善。L/D8程度まで連続穴可'},
+    mid: {fF:1.15, vcF:1.15, ldF:1.35, desc:'TSC中圧(7〜10MPa):標準深穴。L/D12程度まで連続可能。工具寿命+30%'},
+    high:{fF:1.25, vcF:1.20, ldF:1.60, desc:'TSC高圧(20〜40MPa):超深穴対応。L/D20+。工具寿命大幅延長。切りくず完全排出'},
+  };
+  return t[tsc]||t.none;
+}
+
+/* L/D深さ補正 */
+function ldFactor(ld, tsc) {
+  const tf = tscFactor(tsc);
+  const base = interp(ld,[[0,1.00],[1,1.00],[2,0.93],[3,0.85],[4,0.75],[5,0.65],[6,0.55],[8,0.45],[10,0.36],[12,0.30],[15,0.24],[20,0.18],[99,0.14]]);
+  return Math.min(base*tf.ldF, 1.0);
+}
+
+/* 旋盤 Fc */
+function turningFc(f, ap, mat, kr_deg) {
+  const db = MAT[mat];
+  const Kc = 1 + 0.15*Math.cos((kr_deg||75)*Math.PI/180); // κr補正
+  return db.Ks1*Math.pow(f,1-db.mc)*ap*Kc;
+}
+
+/* 旋盤 f_max */
+function fMaxTurning(ap, mat, toolKey, Vc, Pm, eta, kr_deg) {
+  const db = MAT[mat];
+  const tl = TOOL[toolKey];
+  const Fc_motor = (Pm*eta*1000*60)/Vc;
+  const b_s=20, h_s=20;
+  const Z_shank = b_s*h_s*h_s/6;
+  const M_all = tl.sigma*tl.rho*Z_shank;
+  const Fc_tool = M_all/(2.5*h_s);
+  const Fc_max = Math.min(Fc_motor, Fc_tool);
+  const Kc = 1+0.15*Math.cos((kr_deg||75)*Math.PI/180);
+  const rhs = Fc_max/(db.Ks1*ap*Kc);
+  if(rhs<=0) return {f:0,Fc_max_motor:Fc_motor,Fc_max_tool:Fc_tool,Fc_max};
+  const f = Math.pow(rhs, 1/(1-db.mc));
+  return {f, Fc_max_motor:Fc_motor, Fc_max_tool:Fc_tool, Fc_max};
+}
+
+/* ================================================================
+   バー・UI ヘルパー
+================================================================ */
+function drawBar(bid, pctId, pct) {
+  const b=document.getElementById(bid), p=document.getElementById(pctId);
+  if(!b||!p) return;
+  const c=Math.min(Math.max(pct,0),120);
+  b.style.width=Math.min(c,100)+'%';
+  p.textContent=c.toFixed(0)+'%';
+  b.style.background=c<40?'#22c55e':c<65?'#3b82f6':c<85?'#f97316':c<100?'#ef4444':'#7c3aed';
+}
+
+function setPhys(pre, items, verdTxt, status) {
+  const panel=document.getElementById(pre+'_phys_panel');
+  const grid=document.getElementById(pre+'_phys_grid');
+  const verd=document.getElementById(pre+'_verdict');
+  if(!panel) return;
+  panel.className='phys-panel '+status;
+  verd.className='verdict '+status;
+  verd.textContent=verdTxt;
+  grid.innerHTML=items.map(it=>`<div class="phys-item"><div class="p-lbl">${it.l}</div><div class="p-val">${it.v}</div></div>`).join('');
+}
+
+function setFeedField(id, val, status) {
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.value=(status==='ng')?'0 ← 加工不可':p4(val);
+  el.className=status==='ok'?'f-ok':status==='warn'?'f-warn':'f-ng';
+}
+
+function setBtn(id, enabled) {
+  const b=document.getElementById(id);
+  if(!b) return;
+  b.className='calc-btn '+(enabled?'enabled':'disabled-btn');
+  b.disabled=!enabled;
+}
+
+function p4(v){return parseFloat(v.toFixed(4));}
+function p2(v){return parseFloat(v.toFixed(2));}
+function n(id){const v=parseFloat(document.getElementById(id).value);return isNaN(v)?0:v;}
+function s(id){const el=document.getElementById(id);return el?el.value:'';}
+function fmtT(sec){const m=Math.floor(sec/60),s2=Math.round(sec%60);return m>0?`${m}分${s2}秒`:`${s2}秒`;}
+
+function getToolChips(toolKey) {
+  const t=TOOL[toolKey];
+  if(!t) return '';
+  return `<div class="td-row">${t.chips.map(c=>`<span class="td-chip">${c}</span>`).join('')}</div>`;
+}
+
+/* ================================================================
+   タブ切替
+================================================================ */
+function switchMain(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(e=>e.classList.remove('active'));
+  const el=document.getElementById('tab_'+tab);
+  if(el) el.classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ================================================================
+   比較テーブルへの追加
+================================================================ */
+const compareData=[];
+function addCompare(row){
+  compareData.push(row);
+  renderCompare();
+}
+function renderCompare(){
+  const ct=document.getElementById('compare_table');
+  if(!ct) return;
+  if(compareData.length===0){ct.innerHTML='<p style="color:var(--txt3);font-size:12px">各タブで計算を実行してください</p>';return;}
+  let h=`<table class="cmp-table"><tr><th>#</th><th>種別</th><th>材料</th><th>工具径D</th><th>Vc</th><th>S(rpm)</th><th>fz/f</th><th>F(mm/min)</th><th>Fc(N)</th><th>Pc(kW)</th><th>負荷%</th><th>MRR</th><th>工具寿命T</th><th>判定</th></tr>`;
+  compareData.forEach((r,i)=>{
+    h+=`<tr><td>${i+1}</td><td>${r.type}</td><td>${r.mat}</td><td>${r.D}mm</td>
+    <td>${r.Vc}m/min</td><td>${r.S}rpm</td><td class="hi">${r.fz}mm</td><td class="hi">${r.F}mm/min</td>
+    <td>${r.Fc}N</td><td>${r.Pc}kW</td>
+    <td style="color:${r.load>80?'#fca5a5':r.load>60?'#fcd34d':'#86efac'}">${r.load}%</td>
+    <td>${r.MRR}</td><td>${r.T}</td><td>${r.ok?'✅':'⚠'}</td></tr>`;
+  });
+  h+='</table>';
+  ct.innerHTML=h;
+}
+
+/* ================================================================
+   Taylor SVGプロット
+================================================================ */
+function drawTaylor(svgId, Vc_curr, mat) {
+  const svg=document.getElementById(svgId);
+  if(!svg) return;
+  const db=MAT[mat];
+  const W=400, H=120;
+  const vcMin=Vc_curr*0.5, vcMax=Vc_curr*2.0;
+  const pts=[];
+  for(let i=0;i<=20;i++){
+    const vc=vcMin+(vcMax-vcMin)*i/20;
+    const T=db.C_T/Math.pow(vc, 1/db.n_T);
+    pts.push([vc,T]);
+  }
+  const tMax=Math.max(...pts.map(p=>p[1]));
+  const toX=vc=>(vc-vcMin)/(vcMax-vcMin)*(W-40)+20;
+  const toY=t=>H-10-(t/tMax)*(H-20);
+  const path=pts.map((p,i)=>(i===0?'M':'L')+toX(p[0]).toFixed(1)+','+toY(p[1]).toFixed(1)).join(' ');
+  const Tcurr=taylorLife(Vc_curr,mat);
+  const cx=toX(Vc_curr), cy=toY(Tcurr);
+  svg.innerHTML=`
+    <line x1="20" y1="${H-10}" x2="${W-10}" y2="${H-10}" stroke="#334155" stroke-width="1"/>
+    <line x1="20" y1="5" x2="20" y2="${H-10}" stroke="#334155" stroke-width="1"/>
+    <path d="${path}" fill="none" stroke="#7c3aed" stroke-width="2"/>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="#ffd700" stroke="#fff" stroke-width="1.5"/>
+    <text x="${cx+7}" y="${cy-4}" font-size="9" fill="#ffd700">T=${Tcurr.toFixed(0)}min</text>
+    <text x="22" y="${H-12}" font-size="8" fill="#64748b">Vc_low</text>
+    <text x="${W-40}" y="${H-12}" font-size="8" fill="#64748b">Vc_high</text>
+    <text x="${cx-12}" y="${H-2}" font-size="8" fill="#ffd700">現在Vc</text>`;
+}
+
+/* ================================================================
+   ☆ フライス (ソリッドエンドミル) refresh / calc
+================================================================ */
+function refreshM() {
+  const D=n('m_D'), Z=parseInt(s('m_Z'))||4;
+  const mat=s('m_mat'), proc=s('m_proc'), tool=s('m_tool');
+  const ap=n('m_ap'), ae=n('m_ae');
+  const Pm=n('m_motor')||7.5, eta=n('m_eta')||0.80;
+  const nmax=n('m_nmax')||12000;
+  const OAL=n('m_OAL')||0, OH_inp=n('m_OH')||0;
+
+  const tl=TOOL[tool];
+  const db=MAT[mat];
+  document.getElementById('m_tool_desc').innerHTML=`${tl.desc}${getToolChips(tool)}`;
+
+  const Vc_base=db.vcM[proc]*tl.vcF;
+  const S_theo=Math.round(Vc_base*1000/(Math.PI*Math.max(D,0.001)));
+  const S_act=Math.min(S_theo, nmax);
+  const Vc=Math.round(S_act*Math.PI*Math.max(D,0.001)/1000);
+  document.getElementById('m_Vc').value=Vc;
+
+  if(!D||D<=0||!ap||ap<=0||!ae||ae<=0){
+    document.getElementById('m_fzmax').value='';
+    document.getElementById('m_fz').value='';
+    setBtn('m_btn',false); return;
+  }
+  if(ae>D){document.getElementById('m_fz').value='ae>D !';setBtn('m_btn',false);return;}
+
+  const OH=OH_inp>0?OH_inp:3*D;
+  const ohF=ohFactor(OH,D);
+  const vibS=vibFactor(OH,D);
+  document.getElementById('m_oh_info').innerHTML=
+    `OH=${OH.toFixed(1)}mm / D=${D}mm → <b>OH/D=${(OH/D).toFixed(2)}</b><br>
+    切削条件低減係数: <b style="color:${ohF>0.85?'#86efac':ohF>0.65?'#fcd34d':'#fca5a5'}">×${ohF.toFixed(3)}</b> &nbsp;|&nbsp;
+    振動安定性: <b style="color:${vibS.stable?'#86efac':'#fca5a5'}">${vibS.lv}</b>`;
+
+  const fz_max_phys=fzMaxMilling(ae,D,ap,Z,mat,tl.sigma,tl.rho,Vc,Pm,eta,OH)*ohF;
+  const fz_cat=(M_FZ_CAT[mat]||M_FZ_CAT.steel)[proc]*fzDiamFactor(D)*ohF;
+  const fz_real=Math.min(fz_max_phys, fz_cat);
+
+  document.getElementById('m_fzmax').value=p4(fz_max_phys);
+  document.getElementById('m_S_prev').value=S_act;
+
+  const Fc1=FcTooth(fz_real,ae,D,ap,mat);
+  const FcT=FcTotal(fz_real,ae,D,ap,Z,mat);
+  const Pc=(FcT*Vc)/(60*1000);
+  const P_av=Pm*eta;
+  const loadP=(Pc/P_av)*100;
+  const hm=hmM(fz_real,ae,D);
+  const ze=Zeff(Z,ae,D);
+  const phiD=phiDeg(ae,D);
+  const Zsec=sectionModulusEM(D,Z);
+  const M_all=tl.sigma*tl.rho*Zsec;
+  const M_act=Fc1*OH;
+  const stressR=M_act/M_all;
+  const TaylorT=taylorLife(Vc,mat);
+
+  const feasible=fz_real>=0.001&&stressR<=1.0&&loadP<=100&&vibS.stable||stressR<=1.0&&loadP<=100&&fz_real>=0.001;
+
+  const items=[
+    {l:'係合角φ',v:phiD.toFixed(1)+'°'},
+    {l:'Zeff',v:ze.toFixed(2)+'刃'},
+    {l:'hm平均切削厚',v:hm.toFixed(4)+' mm'},
+    {l:'1刃切削力',v:Fc1.toFixed(0)+' N'},
+    {l:'合計切削力',v:FcT.toFixed(0)+' N'},
+    {l:'実動力Pc',v:Pc.toFixed(2)+' kW'},
+    {l:'機械負荷',v:loadP.toFixed(0)+'%'},
+    {l:'工具応力比',v:(stressR*100).toFixed(0)+'%'},
+    {l:'曲げM(実)',v:M_act.toFixed(0)+' N·mm'},
+    {l:'許容M',v:M_all.toFixed(0)+' N·mm'},
+    {l:'Taylor寿命T',v:TaylorT.toFixed(0)+' min'},
+    {l:'振動安定性',v:vibS.lv},
+  ];
+  let st,vt;
+  if(!feasible||stressR>1.0||loadP>100){st='crit';vt='🚫 加工不可 — 工具破損/出力超過';}
+  else if(stressR>0.80||loadP>80||!vibS.stable){st='warn';vt=`⚠️ 高負荷 負荷${loadP.toFixed(0)}% / 応力${(stressR*100).toFixed(0)}%`;}
+  else{st='ok';vt=`✅ 適正 負荷${loadP.toFixed(0)}% / 応力${(stressR*100).toFixed(0)}% / 工具寿命${TaylorT.toFixed(0)}min`;}
+
+  setPhys('m',items,vt,st);
+  drawBar('m_bar_load','m_pct_load',loadP);
+  drawBar('m_bar_stress','m_pct_stress',stressR*100);
+  setFeedField('m_fz',fz_real,stressR>1.0||loadP>100?'ng':stressR>0.80||loadP>80?'warn':'ok');
+  setBtn('m_btn',feasible&&stressR<=1.0&&loadP<=100);
+
+  const recP=document.getElementById('m_rec');
+  recP.className='phys-panel '+(feasible&&stressR<=1.0&&loadP<=100?'ok':'crit');
+  document.getElementById('m_rec_body').innerHTML=`
+<p style="font-size:11px;line-height:1.9;color:var(--txt2)">
+<b>工具:</b> ${tl.name} | <b>材料:</b> ${db.name}<br>
+<b>Vc:</b> ${db.vcM[proc]}×${tl.vcF}=${Vc} m/min | <b>S:</b> min(${S_theo},${nmax})=${S_act} rpm<br>
+<b>係合角:</b> φ=${phiD.toFixed(1)}° | <b>Zeff:</b> ${ze.toFixed(2)}<br>
+<b>hm:</b> ${hm.toFixed(4)} mm | <b>OH/D:</b> ${(OH/D).toFixed(2)} | <b>ohF:</b> ×${ohF.toFixed(3)}<br>
+<b>fz_max物理:</b> ${p4(fz_max_phys)} | <b>fz_cat:</b> ${p4(fz_cat)}<br>
+<b>確定fz=</b>min(${p4(fz_max_phys)}, ${p4(fz_cat)})=<b style="color:#ffd700">${p4(fz_real)} mm/刃</b><br>
+<b>Taylor寿命:</b> T=${TaylorT.toFixed(0)} min @ Vc=${Vc} m/min
+</p>`;
+}
+
+function calcM() {
+  const D=n('m_D'), Z=parseInt(s('m_Z'))||4;
+  const mat=s('m_mat'), proc=s('m_proc'), tool=s('m_tool');
+  const ap=n('m_ap'), ae=n('m_ae'), L=n('m_L'), pass=parseInt(s('m_pass'))||1;
+  const Pm=n('m_motor'), eta=n('m_eta'), nmax=n('m_nmax')||12000;
+  const OH_inp=n('m_OH')||0;
+  const tl=TOOL[tool], db=MAT[mat];
+  const Vc_b=db.vcM[proc]*tl.vcF;
+  const S_t=Math.round(Vc_b*1000/(Math.PI*D));
+  const S=Math.min(S_t,nmax);
+  const Vc=Math.round(S*Math.PI*D/1000);
+  const OH=OH_inp>0?OH_inp:3*D;
+  const ohF=ohFactor(OH,D);
+  const fz_mp=fzMaxMilling(ae,D,ap,Z,mat,tl.sigma,tl.rho,Vc,Pm,eta,OH)*ohF;
+  const fz_c=(M_FZ_CAT[mat]||M_FZ_CAT.steel)[proc]*fzDiamFactor(D)*ohF;
+  const fz=Math.min(fz_mp,fz_c);
+  const F=Math.round(S*fz*Z);
+  const FcT=FcTotal(fz,ae,D,ap,Z,mat);
+  const Fc1=FcTooth(fz,ae,D,ap,mat);
+  const Pc=(FcT*Vc)/(60*1000);
+  const P_av=Pm*eta;
+  const loadP=(Pc/P_av)*100;
+  const hm=hmM(fz,ae,D);
+  const ze=Zeff(Z,ae,D);
+  const phiD2=phiDeg(ae,D);
+  const Zsec=sectionModulusEM(D,Z);
+  const M_all=tl.sigma*tl.rho*Zsec;
+  const stressR=(Fc1*OH/M_all)*100;
+  const MRR=(ap*ae*F/1000).toFixed(2);
+  const sec=L*pass/F*60;
+  const TaylorT=taylorLife(Vc,mat);
+  // フラットエンドミル面粗さ: スキャロップ高さ h = ae²/(8D) [mm] → μm
+  const Rz_scallop=(ae*ae/(8*D)*1000).toFixed(2);
+  // 送り方向粗さ(参考): fz²/(8D)×1000 [μm] (近似)
+  const Rz_feed=(fz*fz/(8*D)*1000).toFixed(3);
+
+  const rh=document.getElementById('m_rh');
+  rh.className=`result-header ${loadP>80?'warn-res':'ok-res'}`;
+  document.getElementById('m_rg').innerHTML=`
+    <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🏆 送り速度 F (学術物理計算値)</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item"><div class="res-lbl">切削速度 Vc</div><div class="res-val">${Vc} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">確定 fz</div><div class="res-val">${p4(fz)} mm/刃</div></div>
+    <div class="res-item"><div class="res-lbl">平均切削厚 hm</div><div class="res-val">${hm.toFixed(4)} mm</div></div>
+    <div class="res-item"><div class="res-lbl">有効刃数 Zeff</div><div class="res-val">${ze.toFixed(2)} 刃</div></div>
+    <div class="res-item"><div class="res-lbl">合計切削力 Fc</div><div class="res-val">${FcT.toFixed(0)} N</div></div>
+    <div class="res-item"><div class="res-lbl">実動力 Pc</div><div class="res-val">${Pc.toFixed(2)} kW</div></div>
+    <div class="res-item"><div class="res-lbl">機械負荷率</div><div class="res-val">${loadP.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">工具応力比</div><div class="res-val">${stressR.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">MRR</div><div class="res-val">${MRR} cm³/min</div></div>
+    <div class="res-item"><div class="res-lbl">スキャロップ高さ Rz (段差)</div><div class="res-val">${Rz_scallop} μm</div></div>
+    <div class="res-item"><div class="res-lbl">送り方向粗さ参考 Rz</div><div class="res-val">${Rz_feed} μm</div></div>
+    <div class="res-item"><div class="res-lbl">Taylor工具寿命 T</div><div class="res-val">${TaylorT.toFixed(0)} min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">切削時間</div><div class="res-val">${fmtT(sec)}</div></div>`;
+
+  drawTaylor('m_taylor_svg', Vc, mat);
+  document.getElementById('m_taylor_box').classList.remove('hidden');
+
+  const wc=document.getElementById('m_warns'); wc.innerHTML='';
+  if(loadP>80) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 機械高負荷</h3><p>ap/aeを低減推奨</p></div>';
+  if(stressR>70) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 工具応力高</h3><p>突き出しを短く/切込み低減</p></div>';
+  if(!vibFactor(OH,D).stable) wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ びびり危険</h3><p>OH/D='+(OH/D).toFixed(2)+'。突き出し短縮・回転数微調整を推奨</p></div>';
+  if(S>=nmax) wc.innerHTML+='<div class="info-box ib-blue"><h3>💡 回転数上限制限</h3><p>Vc上限が主軸最高回転数で制限されています</p></div>';
+  if(fz<fz_c*0.9) wc.innerHTML+='<div class="info-box ib-purple"><h3>💡 物理上限適用</h3><p>カタログ値より物理上限が小さいため制限されています</p></div>';
+
+  document.getElementById('m_fml').textContent=
+`【学術級切削条件計算 — ソリッドエンドミル詳細ログ】
+
+▼ Step1: 切削速度
+  Vc_base = ${db.vcM[proc]} × vcFactor${tl.vcF} = ${db.vcM[proc]*tl.vcF} m/min
+  S_theo = Vc×1000/(π×D) = ${S_t} rpm → min(${S_t},${nmax}) = ${S} rpm
+  Vc_actual = S×π×D/1000 = ${Vc} m/min
+
+▼ Step2: 突き出しOH/D補正
+  OH = ${OH.toFixed(1)} mm / D = ${D} mm → OH/D = ${(OH/D).toFixed(2)}
+  ohFactor = ${ohF.toFixed(3)} (剛性低下・びびり補正)
+  振動安定性: ${vibFactor(OH,D).lv}
+
+▼ Step3: 係合角・Zeff (厳密積分式)
+  φ_eng = arccos(1-2×ae/D) = arccos(${(1-2*ae/D).toFixed(4)}) = ${phiD2.toFixed(3)}°
+  Zeff = Z×φ_eng/(2π) = ${Z}×${phiD2.toFixed(3)}°/360° = ${ze.toFixed(4)} 刃
+
+▼ Step4: 平均切削厚 hm (厳密式)
+  hm = fz × 2sin(φ/2)/φ[rad] = ${p4(fz)}×${(2*Math.sin(phiD2/2*Math.PI/180)/(phiD2*Math.PI/180)).toFixed(4)} = ${hm.toFixed(5)} mm
+
+▼ Step5: 工具断面強度(材料力学)
+  コア径比: dc/D = ${coreRatioEM(Z)} (Z=${Z}刃)
+  断面係数: Z_sec = π(D⁴-dc⁴)/(32D) = ${Zsec.toFixed(2)} mm³
+  有効許容応力: σ_allow×ρ_impact = ${tl.sigma}×${tl.rho} = ${(tl.sigma*tl.rho).toFixed(0)} MPa
+  許容曲げM: M_allow = σ×Z_sec = ${M_all.toFixed(0)} N·mm
+  許容1刃切削力 = M_allow/OH = ${M_all.toFixed(0)}/${OH.toFixed(1)} = ${(M_all/OH).toFixed(0)} N
+
+▼ Step6: 機械出力制約
+  P_avail = ${Pm}×${eta} = ${P_av.toFixed(2)} kW
+  Fc_max(motor) = P_avail×60000/Vc = ${(P_av*60000/Vc).toFixed(0)} N (合計)
+  Fc_max(tool_bend) = M_allow/OH = ${M_all.toFixed(0)}/${OH.toFixed(1)} = ${(M_all/OH).toFixed(0)} N (1刃最大切削力)
+
+▼ Step7: fz_max逆算 (Kienzle比切削抵抗式)
+  Fc = Ks1×hm^(1-mc)×ap×Zeff  [hm=fz×C_ae]
+  fz_max_phys (before ohF) = ${p4(fzMaxMilling(ae,D,ap,Z,mat,tl.sigma,tl.rho,Vc,Pm,eta,OH))} mm/刃
+  ohF補正後: × ${ohF.toFixed(3)} = ${p4(fz_mp)} mm/刃
+
+▼ Step8: カタログ基準 fz (径補正込み)
+  fz_base = ${p4((M_FZ_CAT[mat]||M_FZ_CAT.steel)[proc])} mm/刃 (D=16mm基準)
+  径補正係数 = ×${fzDiamFactor(D).toFixed(2)} (D=${D}mm)
+  fz_cat = base×径補正×ohF = ${p4((M_FZ_CAT[mat]||M_FZ_CAT.steel)[proc])}×${fzDiamFactor(D).toFixed(2)}×${ohF.toFixed(3)} = ${p4(fz_c)} mm/刃
+  確定 fz = min(${p4(fz_mp)}, ${p4(fz_c)}) = ${p4(fz)} mm/刃
+
+▼ Step9: 主軸回転数・送り速度
+  F = S×fz×Z = ${S}×${p4(fz)}×${Z} = ${F} mm/min
+
+▼ Step10: 検証
+  hm = ${hm.toFixed(5)} mm
+  Fc(1刃) = ${db.Ks1}×${hm.toFixed(5)}^${(1-db.mc).toFixed(2)}×${ap} = ${Fc1.toFixed(1)} N
+  曲げM = ${Fc1.toFixed(1)}×${OH.toFixed(1)} = ${(Fc1*OH).toFixed(0)} N·mm / 許容${M_all.toFixed(0)} N·mm (${stressR.toFixed(0)}%)
+  Pc = ${FcT.toFixed(0)}×${Vc}/(60×1000) = ${Pc.toFixed(3)} kW / 負荷${loadP.toFixed(0)}%
+  MRR = ap×ae×F/1000 = ${MRR} cm³/min
+  Taylor工具寿命: T = ${db.C_T}/${Vc}^(${(1/db.n_T).toFixed(2)}) = ${TaylorT.toFixed(0)} min
+  面粗さ(スキャロップ): Rz = ae²/(8×D)×1000 = ${ae}²/(8×${D})×1000 = ${Rz_scallop} μm
+  面粗さ(送り方向参考): Rz = fz²/(8×D)×1000 = ${p4(fz)}²/(8×${D})×1000 = ${Rz_feed} μm`;
+
+  document.getElementById('m_result_wrap').classList.remove('hidden');
+  addCompare({type:'エンドミル',mat:db.name,D,Vc,S,fz:p4(fz),F,Fc:FcT.toFixed(0),Pc:Pc.toFixed(2),load:loadP.toFixed(0),MRR:MRR+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80&&stressR<=80});
+}
+
+/* ================================================================
+   ☆ フェイスミル refresh / calc
+================================================================ */
+function refreshFM() {
+  const D=n('fm_D'), Z=n('fm_Z')||8;
+  const mat=s('fm_mat'), grade=s('fm_grade'), kr_str=s('fm_kr');
+  const ap=n('fm_ap'), ae=n('fm_ae');
+  const Pm=n('fm_motor')||15, eta=n('fm_eta')||0.80;
+  const nmax=n('fm_nmax')||6000;
+  const kr=parseFloat(kr_str)||45;
+  const nose=s('fm_nose');
+  const gd=GRADE[grade]||GRADE.P20;
+  const db=MAT[mat]||MAT.steel;
+  const proc='rough';
+  document.getElementById('fm_tool_desc').innerHTML=
+    `<b>${gd.name}</b>: ${gd.desc}<br>アプローチ角κr=${kr}° | ノーズR=${nose==='W'?'ワイパー':nose+'mm'}`;
+
+  const Vc_base=db.vcM[proc]*gd.vcF;
+  const S_t=Math.round(Vc_base*1000/(Math.PI*Math.max(D,1)));
+  const S=Math.min(S_t,nmax);
+  const Vc=Math.round(S*Math.PI*Math.max(D,1)/1000);
+  document.getElementById('fm_Vc').value=Vc;
+
+  if(!D||D<=0||!ap||ap<=0||!ae||ae<=0){document.getElementById('fm_fz').value='';setBtn('fm_btn',false);return;}
+  if(ae>D*1.0){/* OK for facemill */}
+
+  // フェイスミルはOH不要→ボディ剛性はチップ保持で管理
+  const fz_max_phys=fzMaxMilling(Math.min(ae,D),D,ap,Z,mat,GRADE[grade].vcF>2?520:440,0.65,Vc,Pm,eta,D*0.3);
+  const fz_cat=(FM_FZ_CAT[mat]||FM_FZ_CAT.steel)['rough']*gd.fzF;
+  const fz_kr=Math.min(fz_max_phys,fz_cat)*(1+0.3*(1-kr/90));
+  const fz=Math.min(fz_kr,fz_cat*1.5);
+
+  const ze=Zeff(Z,Math.min(ae,D),D);
+  const phiD3=phiDeg(Math.min(ae,D),D);
+  const hm=hmM(fz,Math.min(ae,D),D);
+  const Fc1=FcTooth(fz,Math.min(ae,D),D,ap,mat);
+  const FcT=FcTotal(fz,Math.min(ae,D),D,ap,Z,mat);
+  const Pc=(FcT*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  const feasible=fz>=0.001&&loadP<=100;
+
+  const items=[
+    {l:'係合角φ',v:phiD3.toFixed(1)+'°'},
+    {l:'Zeff',v:ze.toFixed(2)+'刃'},
+    {l:'hm',v:hm.toFixed(4)+' mm'},
+    {l:'合計切削力',v:FcT.toFixed(0)+' N'},
+    {l:'実動力',v:Pc.toFixed(2)+' kW'},
+    {l:'機械負荷',v:loadP.toFixed(0)+'%'},
+    {l:'κr補正',v:(1+0.3*(1-kr/90)).toFixed(3)+'×'},
+  ];
+  setPhys('fm',items,feasible?`✅ 適正 ${loadP.toFixed(0)}%`:'🚫 出力超過',feasible?'ok':'crit');
+  setFeedField('fm_fz',fz,!feasible?'ng':loadP>80?'warn':'ok');
+  setBtn('fm_btn',feasible);
+
+  document.getElementById('fm_rec_body').innerHTML=`
+<p style="font-size:11px;line-height:1.9;color:var(--txt2)">
+<b>${gd.name}</b> κr=${kr}° Nose=${nose}<br>
+<b>fz_cat:</b> ${p4(fz_cat)} | <b>κr補正後:</b> ${p4(fz_kr)} | <b>確定:</b> <b style="color:#ffd700">${p4(fz)} mm/刃</b><br>
+<b>Vc:</b> ${Vc} m/min | <b>S:</b> ${S} rpm | <b>Zeff:</b> ${ze.toFixed(2)}<br>
+<b>φ:</b> ${phiD3.toFixed(1)}° | <b>hm:</b> ${hm.toFixed(4)} mm | <b>負荷:</b> ${loadP.toFixed(0)}%
+</p>`;
+}
+
+function calcFM() {
+  const D=n('fm_D'), Z=n('fm_Z')||8;
+  const mat=s('fm_mat'), grade=s('fm_grade'), kr_str=s('fm_kr');
+  const ap=n('fm_ap'), ae=n('fm_ae'), L=n('fm_L')||200;
+  const Pm=n('fm_motor'), eta=n('fm_eta'), nmax=n('fm_nmax')||6000;
+  const kr=parseFloat(kr_str)||45;
+  const nose=s('fm_nose');
+  const gd=GRADE[grade]||GRADE.P20, db=MAT[mat]||MAT.steel;
+  const Vc_b=db.vcM['rough']*gd.vcF;
+  const S_t=Math.round(Vc_b*1000/(Math.PI*D));
+  const S=Math.min(S_t,nmax);
+  const Vc=Math.round(S*Math.PI*D/1000);
+  const fz_max=fzMaxMilling(Math.min(ae,D),D,ap,Z,mat,gd.vcF>2?520:440,0.65,Vc,Pm,eta,D*0.3);
+  const fz_cat=(FM_FZ_CAT[mat]||FM_FZ_CAT.steel)['rough']*gd.fzF;
+  const fz_kr=Math.min(fz_max,fz_cat)*(1+0.3*(1-kr/90));
+  const fz=Math.min(fz_kr,fz_cat*1.5);
+  const F=Math.round(S*fz*Z);
+  const FcT=FcTotal(fz,Math.min(ae,D),D,ap,Z,mat);
+  const Pc=(FcT*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  const MRR=(ap*Math.min(ae,D)*F/1000).toFixed(2);
+  const sec=L/F*60;
+  const reVal=nose==='W'?0.8:parseFloat(nose);
+  const Rz=theorRz(fz,reVal).toFixed(1);
+  const TaylorT=taylorLife(Vc,mat);
+
+  document.getElementById('fm_rg').innerHTML=`
+    <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🏆 送り速度 F</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item"><div class="res-lbl">切削速度 Vc</div><div class="res-val">${Vc} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">確定 fz</div><div class="res-val">${p4(fz)} mm/刃</div></div>
+    <div class="res-item"><div class="res-lbl">合計切削力</div><div class="res-val">${FcT.toFixed(0)} N</div></div>
+    <div class="res-item"><div class="res-lbl">実動力 Pc</div><div class="res-val">${Pc.toFixed(2)} kW</div></div>
+    <div class="res-item"><div class="res-lbl">機械負荷率</div><div class="res-val">${loadP.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">κr補正係数</div><div class="res-val">×${(1+0.3*(1-kr/90)).toFixed(3)}</div></div>
+    <div class="res-item"><div class="res-lbl">理論面粗さ Rz</div><div class="res-val">${nose==='W'?'ワイパー鏡面':Rz+' μm'}</div></div>
+    <div class="res-item"><div class="res-lbl">MRR</div><div class="res-val">${MRR} cm³/min</div></div>
+    <div class="res-item"><div class="res-lbl">Taylor工具寿命</div><div class="res-val">${TaylorT.toFixed(0)} min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">切削時間</div><div class="res-val">${fmtT(sec)}</div></div>`;
+  const wc=document.getElementById('fm_warns');wc.innerHTML='';
+  if(nose==='W') wc.innerHTML+='<div class="info-box ib-green"><h3>✅ ワイパーチップ</h3><p>理論面粗さは通常の1/4以下を実現。送りを2倍にしても同等粗さを維持できます。fz×2での再計算を推奨。</p></div>';
+  if(loadP>80) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 高負荷</h3><p>ap/aeを低減推奨</p></div>';
+  document.getElementById('fm_fml').textContent=
+`【チップ式フェイスミル 学術計算ログ】
+チップ材種: ${gd.name} | κr: ${kr}° | ノーズ: ${nose}
+Vc = ${db.vcM['rough']}×${gd.vcF}(gr)=${Vc} m/min | S=${S} rpm
+fz_cat_base = ${p4((FM_FZ_CAT[mat]||FM_FZ_CAT.steel)['rough'])} × fzFactor${gd.fzF} = ${p4(fz_cat)}
+κr補正: ×${(1+0.3*(1-kr/90)).toFixed(3)} (κr小→fz増加)
+確定 fz = ${p4(fz)} mm/刃 | F = ${F} mm/min
+Fc = ${FcT.toFixed(0)} N | Pc = ${Pc.toFixed(2)} kW | 負荷 ${loadP.toFixed(0)}%
+MRR = ${MRR} cm³/min | Rz(理論) = ${nose==='W'?'ワイパー補正':Rz+' μm'}
+Taylor工具寿命 T = ${TaylorT.toFixed(0)} min`;
+  document.getElementById('fm_result_wrap').classList.remove('hidden');
+  addCompare({type:'フェイスミル',mat:(MAT[mat]||MAT.steel).name,D,Vc,S,fz:p4(fz),F,Fc:FcT.toFixed(0),Pc:Pc.toFixed(2),load:loadP.toFixed(0),MRR:MRR+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80});
+}
+
+/* ================================================================
+   ☆ インデキサブルエンドミル refresh / calc
+================================================================ */
+function refreshIE() {
+  const D=n('ie_D'), Z=n('ie_Z')||2;
+  const mat=s('ie_mat'), grade=s('ie_grade'), kr=parseFloat(s('ie_kr'))||45;
+  const ap=n('ie_ap'), ae=n('ie_ae'), proc=s('ie_proc');
+  const Pm=n('ie_motor')||11, eta=n('ie_eta')||0.80;
+  const nmax=n('ie_nmax')||8000;
+  const shape=s('ie_shape');
+  const re=parseFloat(s('ie_re'))||0.8;
+  const gd=GRADE[grade]||GRADE.P20, db=MAT[mat]||MAT.steel;
+
+  document.getElementById('ie_tool_desc').innerHTML=
+    `<b>${gd.name}</b>: ${gd.desc}<br>形状:${shape} κr=${kr}° Rε=${re}mm`;
+
+  const Vc_b=db.vcM[proc]*gd.vcF;
+  const S_t=Math.round(Vc_b*1000/(Math.PI*Math.max(D,1)));
+  const S=Math.min(S_t,nmax);
+  const Vc=Math.round(S*Math.PI*Math.max(D,1)/1000);
+  document.getElementById('ie_Vc').value=Vc;
+
+  if(!D||D<=0||!ap||ap<=0||!ae||ae<=0){setBtn('ie_btn',false);document.getElementById('ie_fz').value='';return;}
+
+  // インデキサブルはソリッドより剛性が低い(チップ取付部)→σを下げる
+  const fz_max=fzMaxMilling(Math.min(ae,D),D,ap,Z,mat,380*gd.fzF,0.65,Vc,Pm,eta,D*0.5);
+  const fz_cat=(FM_FZ_CAT[mat]||FM_FZ_CAT.steel)[proc]*gd.fzF*(1+0.2*(1-kr/90));
+  const fz=Math.min(fz_max,fz_cat);
+
+  const FcT=FcTotal(fz,Math.min(ae,D),D,ap,Z,mat);
+  const Pc=(FcT*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  const hm=hmM(fz,Math.min(ae,D),D);
+  const phiD4=phiDeg(Math.min(ae,D),D);
+  const Rz=theorRz(fz,re).toFixed(1);
+  const feasible=fz>=0.001&&loadP<=100;
+
+  const items=[
+    {l:'係合角',v:phiD4.toFixed(1)+'°'},
+    {l:'hm',v:hm.toFixed(4)+' mm'},
+    {l:'切削力',v:FcT.toFixed(0)+' N'},
+    {l:'実動力',v:Pc.toFixed(2)+' kW'},
+    {l:'機械負荷',v:loadP.toFixed(0)+'%'},
+    {l:'理論面粗さ',v:Rz+' μm'},
+  ];
+  setPhys('ie',items,feasible?`✅ 適正 ${loadP.toFixed(0)}%`:'🚫 加工不可',feasible?'ok':'crit');
+  setFeedField('ie_fz',fz,!feasible?'ng':loadP>80?'warn':'ok');
+  setBtn('ie_btn',feasible);
+
+  document.getElementById('ie_rec_body').innerHTML=`
+<p style="font-size:11px;line-height:1.9;color:var(--txt2)">
+${gd.name} | κr=${kr}° | Rε=${re}mm | 形状:${shape}<br>
+<b>fz_max:</b> ${p4(fz_max)} | <b>fz_cat:</b> ${p4(fz_cat)}<br>
+<b>確定fz:</b> <b style="color:#ffd700">${p4(fz)} mm/刃</b> | <b>負荷:</b> ${loadP.toFixed(0)}%<br>
+<b>理論Rz:</b> ${Rz} μm
+</p>`;
+}
+
+function calcIE() {
+  const D=n('ie_D'), Z=n('ie_Z')||2;
+  const mat=s('ie_mat'), grade=s('ie_grade'), kr=parseFloat(s('ie_kr'))||45;
+  const ap=n('ie_ap'), ae=n('ie_ae'), proc=s('ie_proc');
+  const Pm=n('ie_motor'), eta=n('ie_eta'), nmax=n('ie_nmax')||8000;
+  const re=parseFloat(s('ie_re'))||0.8;
+  const gd=GRADE[grade]||GRADE.P20, db=MAT[mat]||MAT.steel;
+  const Vc_b=db.vcM[proc]*gd.vcF;
+  const S_t=Math.round(Vc_b*1000/(Math.PI*D));
+  const S=Math.min(S_t,nmax);
+  const Vc=Math.round(S*Math.PI*D/1000);
+  const fz_max=fzMaxMilling(Math.min(ae,D),D,ap,Z,mat,380*gd.fzF,0.65,Vc,Pm,eta,D*0.5);
+  const fz_cat=(FM_FZ_CAT[mat]||FM_FZ_CAT.steel)[proc]*gd.fzF*(1+0.2*(1-kr/90));
+  const fz=Math.min(fz_max,fz_cat);
+  const F=Math.round(S*fz*Z);
+  const FcT=FcTotal(fz,Math.min(ae,D),D,ap,Z,mat);
+  const Pc=(FcT*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  const MRR=(ap*Math.min(ae,D)*F/1000).toFixed(2);
+  const Rz=theorRz(fz,re).toFixed(1);
+  const TaylorT=taylorLife(Vc,mat);
+
+  document.getElementById('ie_rg').innerHTML=`
+    <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🏆 送り速度 F</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item"><div class="res-lbl">Vc</div><div class="res-val">${Vc} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">確定 fz</div><div class="res-val">${p4(fz)} mm/刃</div></div>
+    <div class="res-item"><div class="res-lbl">切削力</div><div class="res-val">${FcT.toFixed(0)} N</div></div>
+    <div class="res-item"><div class="res-lbl">実動力</div><div class="res-val">${Pc.toFixed(2)} kW</div></div>
+    <div class="res-item"><div class="res-lbl">機械負荷</div><div class="res-val">${loadP.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">理論面粗さ Rz</div><div class="res-val">${Rz} μm</div></div>
+    <div class="res-item"><div class="res-lbl">MRR</div><div class="res-val">${MRR} cm³/min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">Taylor工具寿命</div><div class="res-val">${TaylorT.toFixed(0)} min</div></div>`;
+  const wc=document.getElementById('ie_warns');wc.innerHTML='';
+  if(loadP>80) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 高負荷</h3><p>ap/aeを低減推奨</p></div>';
+  document.getElementById('ie_fml').textContent=
+`【チップ式エンドミル計算ログ】
+${gd.name} | κr=${kr}° | Rε=${re}mm
+Vc=${Vc} m/min | S=${S} rpm
+fz=${p4(fz)} mm/刃 | F=${F} mm/min
+Fc=${FcT.toFixed(0)} N | Pc=${Pc.toFixed(2)} kW | 負荷${loadP.toFixed(0)}%
+Rz=${Rz} μm | MRR=${MRR} cm³/min | T=${TaylorT.toFixed(0)} min`;
+  document.getElementById('ie_result_wrap').classList.remove('hidden');
+  addCompare({type:'インデキサブルEM',mat:db.name,D,Vc,S,fz:p4(fz),F,Fc:FcT.toFixed(0),Pc:Pc.toFixed(2),load:loadP.toFixed(0),MRR:MRR+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80});
+}
+
+/* ================================================================
+   ☆ 高送りミル refresh / calc
+================================================================ */
+function refreshHF() {
+  const D=n('hf_D'), Z=n('hf_Z')||4;
+  const mat=s('hf_mat'), grade=s('hf_grade'), kr=parseFloat(s('hf_kr'))||15;
+  const ap=n('hf_ap')||1.0, ae=n('hf_ae');
+  const Pm=n('hf_motor')||11, eta=n('hf_eta')||0.82;
+  const nmax=n('hf_nmax')||8000, proc=s('hf_proc');
+  const gd=GRADE[grade]||GRADE.P20, db=MAT[mat]||MAT.steel;
+
+  const hfF=hfFzFactor(kr);
+  const axR=krAxialRatio(kr);
+  document.getElementById('hf_tool_desc').innerHTML=
+    `アプローチ角 κr=${kr}° | ${gd.name} | ${gd.desc}`;
+  document.getElementById('hf_kr_explain').innerHTML=
+    `<b>κr=${kr}°での物理解析:</b><br>
+    切削力の軸方向成分比: <b style="color:#ffd700">${(axR*100).toFixed(1)}%</b> (スピンドル軸で受ける→剛性高い)<br>
+    径方向成分比: <b style="color:#fca5a5">${(Math.sin(kr*Math.PI/180)*100).toFixed(1)}%</b> (主軸横方向→低く抑制)<br>
+    高送り倍率: <b style="color:#86efac">×${hfF.toFixed(2)}</b> (通常エンドミル比)<br>
+    📌 原理: κr↓→切削厚さh=fz×sin(κr)↓→同じ切削力でより大きなfzが可能`;
+
+  const Vc_b=db.vcM[proc]*gd.vcF*1.1;
+  const S_t=Math.round(Vc_b*1000/(Math.PI*Math.max(D,1)));
+  const S=Math.min(S_t,nmax);
+  const Vc=Math.round(S*Math.PI*Math.max(D,1)/1000);
+  document.getElementById('hf_Vc').value=Vc;
+
+  if(!D||D<=0){setBtn('hf_btn',false);document.getElementById('hf_fz').value='';return;}
+
+  // 高送りの実効切削厚 h_eff = fz × sin(κr)
+  // Fc = Ks1 × h_eff^(1-mc) × ap × Zeff
+  // より大きなfzが可能な理由: sin(κr)が小さいためhmが小さく力が低下
+  const sinKr=Math.sin(kr*Math.PI/180);
+  const Fc_max_m=(Pm*eta*1000*60)/Vc;
+  const ze=Zeff(Z,Math.min(ae,D),D);
+  const rhs=Fc_max_m/(db.Ks1*Math.pow(sinKr,1-db.mc)*ap*(ze||1));
+  const fz_phys=rhs>0?Math.pow(rhs,1/(1-db.mc)):0;
+  const fz_cat_std=(M_FZ_CAT[mat]||M_FZ_CAT.steel)[proc];
+  const fz_hf=Math.min(fz_phys, fz_cat_std*hfF);
+
+  const h_eff=fz_hf*sinKr;
+  const Fc1=db.Ks1*Math.pow(h_eff,1-db.mc)*ap;
+  const FcT_axial=Fc1*ze;
+  const Pc=(FcT_axial*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  const feasible=fz_hf>=0.001&&loadP<=100;
+
+  const items=[
+    {l:'κr',v:kr+'°'},
+    {l:'高送り倍率',v:'×'+hfF.toFixed(2)},
+    {l:'実効切削厚h_eff',v:h_eff.toFixed(4)+' mm'},
+    {l:'軸方向力比',v:(axR*100).toFixed(0)+'%'},
+    {l:'合計切削力',v:FcT_axial.toFixed(0)+' N'},
+    {l:'実動力',v:Pc.toFixed(2)+' kW'},
+    {l:'機械負荷',v:loadP.toFixed(0)+'%'},
+    {l:'fz(通常比)',v:'×'+hfF.toFixed(1)},
+  ];
+  setPhys('hf',items,feasible?`✅ 高送り適正 負荷${loadP.toFixed(0)}% / fz×${hfF.toFixed(1)}倍`:'🚫 加工不可',feasible?'ok':'crit');
+  setFeedField('hf_fz',fz_hf,!feasible?'ng':loadP>80?'warn':'ok');
+  setBtn('hf_btn',feasible);
+
+  document.getElementById('hf_rec_body').innerHTML=`
+<p style="font-size:11px;line-height:1.9;color:var(--txt2)">
+<b>κr=${kr}° → sin(κr)=${sinKr.toFixed(4)} → 実効切削厚係数</b><br>
+<b>fz_phys:</b> ${p4(fz_phys)} | <b>fz_cat×倍率:</b> ${p4(fz_cat_std*hfF)}<br>
+<b>確定fz:</b> <b style="color:#ffd700">${p4(fz_hf)} mm/刃</b> (通常の${hfF.toFixed(1)}倍)<br>
+<b>負荷:</b> ${loadP.toFixed(0)}% | <b>軸方向力比:</b> ${(axR*100).toFixed(0)}%
+</p>`;
+}
+
+function calcHF() {
+  const D=n('hf_D'), Z=n('hf_Z')||4;
+  const mat=s('hf_mat'), grade=s('hf_grade'), kr=parseFloat(s('hf_kr'))||15;
+  const ap=n('hf_ap')||1.0, ae=n('hf_ae');
+  const Pm=n('hf_motor'), eta=n('hf_eta'), nmax=n('hf_nmax')||8000, proc=s('hf_proc');
+  const gd=GRADE[grade]||GRADE.P20, db=MAT[mat]||MAT.steel;
+  const hfF=hfFzFactor(kr);
+  const axR=krAxialRatio(kr);
+  const sinKr=Math.sin(kr*Math.PI/180);
+  const Vc_b=db.vcM[proc]*gd.vcF*1.1;
+  const S_t=Math.round(Vc_b*1000/(Math.PI*D));
+  const S=Math.min(S_t,nmax);
+  const Vc=Math.round(S*Math.PI*D/1000);
+  const Fc_max_m=(Pm*eta*1000*60)/Vc;
+  const ze=Zeff(Z,Math.min(ae,D),D);
+  const rhs=Fc_max_m/(db.Ks1*Math.pow(sinKr,1-db.mc)*ap*(ze||1));
+  const fz_phys=rhs>0?Math.pow(rhs,1/(1-db.mc)):0;
+  const fz_cat_std=(M_FZ_CAT[mat]||M_FZ_CAT.steel)[proc];
+  const fz=Math.min(fz_phys,fz_cat_std*hfF);
+  const F=Math.round(S*fz*Z);
+  const h_eff=fz*sinKr;
+  const Fc1=db.Ks1*Math.pow(h_eff,1-db.mc)*ap;
+  const FcT=Fc1*ze;
+  const Pc=(FcT*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  const MRR=(ap*Math.min(ae,D)*F/1000).toFixed(2);
+  const TaylorT=taylorLife(Vc,mat);
+  const stdFz=fz_cat_std;
+  const stdF=Math.round(S*stdFz*Z);
+
+  document.getElementById('hf_rg').innerHTML=`
+    <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">⚡ 高送り速度 F</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item"><div class="res-lbl">Vc</div><div class="res-val">${Vc} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">確定 fz (高送り)</div><div class="res-val">${p4(fz)} mm/刃</div></div>
+    <div class="res-item"><div class="res-lbl">通常エンドミル比</div><div class="res-val">× ${(fz/stdFz).toFixed(1)} 倍</div></div>
+    <div class="res-item"><div class="res-lbl">実効切削厚 h_eff</div><div class="res-val">${h_eff.toFixed(4)} mm</div></div>
+    <div class="res-item"><div class="res-lbl">軸方向力比</div><div class="res-val">${(axR*100).toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">径方向力比</div><div class="res-val">${(sinKr*100).toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">切削力</div><div class="res-val">${FcT.toFixed(0)} N</div></div>
+    <div class="res-item"><div class="res-lbl">実動力 Pc</div><div class="res-val">${Pc.toFixed(2)} kW</div></div>
+    <div class="res-item"><div class="res-lbl">機械負荷率</div><div class="res-val">${loadP.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">MRR (高送り)</div><div class="res-val">${MRR} cm³/min</div></div>
+    <div class="res-item"><div class="res-lbl">通常時F(参考)</div><div class="res-val">${stdF} mm/min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">高送りによるMRR向上</div><div class="res-val">× ${(F/stdF).toFixed(1)} 倍</div></div>`;
+
+  const wc=document.getElementById('hf_warns');wc.innerHTML='';
+  wc.innerHTML+=`<div class="info-box ib-green"><h3>⚡ 高送り効果</h3><p>通常エンドミル(${stdF}mm/min)比<b>${(F/stdF).toFixed(1)}倍</b>のMRRを実現。ap=${ap}mmの薄切りで高能率加工。</p></div>`;
+  if(loadP>80) wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ 高負荷</h3><p>ap低減またはae低減を推奨</p></div>';
+
+  document.getElementById('hf_fml').textContent=
+`【高送りミル 学術物理計算ログ】
+
+▼ 高送り原理 (アプローチ角κr=${kr}°)
+  実効切削厚 h_eff = fz × sin(κr) = fz × sin(${kr}°) = fz × ${sinKr.toFixed(4)}
+  → κrが小さいほどh_effが小さく、同じ切削力でより大きなfzが可能
+
+▼ 切削力方向分解
+  軸方向成分比 = cos(κr) = ${(axR*100).toFixed(1)}% ← スピンドル剛性が受ける
+  径方向成分比 = sin(κr) = ${(sinKr*100).toFixed(1)}% ← 横方向振動リスク
+
+▼ fz_max逆算
+  Fc_max(motor) = ${(Pm*eta*1000*60/Vc).toFixed(0)} N
+  Fc = Ks1×h_eff^(1-mc)×ap×Zeff
+  fz_phys = ${p4(fz_phys)} mm/刃
+  fz_cat×hfFactor(${hfF.toFixed(2)}) = ${p4(fz_cat_std*hfF)} mm/刃
+  確定 fz = ${p4(fz)} mm/刃
+
+▼ 通常エンドミル比較
+  通常fz = ${p4(stdFz)} mm/刃 → 高送りfz = ${p4(fz)} mm/刃 (${(fz/stdFz).toFixed(1)}倍)
+  通常F = ${stdF} mm/min → 高送りF = ${F} mm/min (${(F/stdF).toFixed(1)}倍)
+  MRR向上率: ${(F/stdF).toFixed(1)}倍`;
+  document.getElementById('hf_result_wrap').classList.remove('hidden');
+  addCompare({type:'高送りミル',mat:db.name,D,Vc,S,fz:p4(fz),F,Fc:FcT.toFixed(0),Pc:Pc.toFixed(2),load:loadP.toFixed(0),MRR:MRR+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80});
+}
+
+/* ================================================================
+   ☆ ドリル refresh / calc
+================================================================ */
+document.getElementById('d_pilot').addEventListener('change', function() {
+  document.getElementById('d_pilot_d_grp').style.display=this.value==='1'?'block':'none';
+  refreshD();
+});
+
+function refreshD() {
+  const D=n('d_D'), L=n('d_L');
+  const mat=s('d_mat'), proc=s('d_proc'), tool=s('d_tool');
+  const Pm=n('d_motor')||5.5, eta=n('d_eta')||0.80;
+  const torqMax=n('d_torque_max')||50;
+  const tsc=s('d_tsc'), tsc_p=n('d_tsc_p')||7;
+  const dType=s('d_type');
+  const pilotOn=s('d_pilot')==='1', d_pilot=pilotOn?n('d_pilot_d'):0;
+  const tl=TOOL[tool];
+  const db=MAT[mat]||MAT.steel;
+  const tf=tscFactor(tsc);
+
+  document.getElementById('d_tool_desc').innerHTML=
+    `<b>${tl.name}</b>: ${tl.desc}<br>ドリル種別: ${dType} | TSC: ${tsc} (${tf.desc})`;
+
+  const Vc_b=db.vcD[proc]*tl.vcF*tf.vcF;
+  document.getElementById('d_Vc').value=Math.round(Vc_b);
+
+  // TSC情報表示
+  document.getElementById('d_tsc_info').innerHTML=
+    `<b>TSC方式:</b> ${tsc} ${tsc!=='none'?`(${tsc_p} MPa)`:''}<br>
+    <b>送り補正:</b> ×${tf.fF.toFixed(2)} | <b>Vc補正:</b> ×${tf.vcF.toFixed(2)} | <b>L/D限界補正:</b> ×${tf.ldF.toFixed(2)}<br>
+    <b>効果:</b> ${tf.desc}<br>
+    ${tsc!=='none'?`<b>TSC適用時の推奨最大L/D:</b> ${
+      tsc==='low'?'8':tsc==='mid'?'12':tsc==='high'?'20+':tsc==='mql'?'5':'3'
+    }D`:''}`;
+
+  if(!D||D<=0){document.getElementById('d_f').value='';setBtn('d_btn',false);return;}
+
+  const Vc=Math.round(Vc_b);
+  const ld=L>0?L/D:1;
+  const ldF=ldFactor(ld,tsc);
+
+  // インデキサブルドリルはトルク比×0.85(外周チップが切削を担う)
+  const torqFactor=dType==='indexable'?0.85:1.0;
+  const pointFactor=dType==='sharp'?1.05:dType==='inco'?1.10:1.0;
+
+  // 下穴補正: 実際に切削する幅=(D-d_pilot)/2
+  const D_eff=pilotOn&&d_pilot>0&&d_pilot<D?D-d_pilot:D;
+  const torqFactor2=pilotOn&&d_pilot>0&&d_pilot<D?Math.pow(D_eff/D,1.8):1.0;
+
+  // 機械出力制約
+  const S_rps=Vc*1000/(Math.PI*D*60);
+  const T_max_m=Math.min((Pm*eta*1000)/(2*Math.PI*S_rps), torqMax);
+
+  // ドリルねじり破断限界
+  const dc=D*0.20;
+  const Ip=Math.PI*(Math.pow(D,4)-Math.pow(dc,4))/32;
+  const tau_a=tl.sigma*tl.rho/2;
+  const T_max_drill=tau_a*Ip/(D/2)/1000;
+
+  const T_max=Math.min(T_max_m, T_max_drill)*torqFactor*torqFactor2;
+
+  // f_max
+  const rhs_t=T_max/(0.0987*Math.pow(D,1.8)*(db.Ks1/2100)*pointFactor);
+  const f_phys=rhs_t>0?Math.pow(rhs_t,1/0.8)*ldF*tf.fF:0;
+  const f_cat=(D_F_CAT[mat]||D_F_CAT.steel)[proc]*ldF*tf.fF;
+  const f_real=Math.min(f_phys,f_cat);
+
+  document.getElementById('d_fmax').value=p4(f_phys);
+  const T_act=drillTorque(D,f_real,mat)*pointFactor*torqFactor2;
+  const Pc=T_act*2*Math.PI*S_rps/1000;
+  const P_av=Pm*eta;
+  const loadP=(Pc/P_av)*100;
+  const T_str=T_act/T_max_drill;
+  const feasible=f_real>=0.003&&T_str<=1.0&&loadP<=100;
+
+  const items=[
+    {l:'L/D比',v:ld.toFixed(1)},
+    {l:'L/D補正',v:'×'+ldF.toFixed(3)},
+    {l:'TSC送り補正',v:'×'+tf.fF.toFixed(2)},
+    {l:'モータ限界T',v:T_max_m.toFixed(4)+' N·m'},
+    {l:'ドリル破断T',v:T_max_drill.toFixed(4)+' N·m'},
+    {l:'実トルク',v:T_act.toFixed(4)+' N·m'},
+    {l:'実動力',v:Pc.toFixed(3)+' kW'},
+    {l:'機械負荷',v:loadP.toFixed(0)+'%'},
+    {l:'ねじり応力比',v:(T_str*100).toFixed(0)+'%'},
+    {l:'下穴補正',v:pilotOn&&d_pilot>0?`D_eff=${D_eff.toFixed(1)}mm`:'なし'},
+  ];
+  let st,vt;
+  if(!feasible){st='crit';vt='🚫 ドリル破断/出力超過';}
+  else if(T_str>0.80||loadP>80){st='warn';vt=`⚠ 高負荷 負荷${loadP.toFixed(0)}% / ねじり${(T_str*100).toFixed(0)}%`;}
+  else{st='ok';vt=`✅ 適正 負荷${loadP.toFixed(0)}% / ねじり${(T_str*100).toFixed(0)}%`;}
+  setPhys('d',items,vt,st);
+  drawBar('d_bar_load','d_pct_load',loadP);
+  drawBar('d_bar_stress','d_pct_stress',T_str*100);
+  setFeedField('d_f',f_real,!feasible?'ng':T_str>0.80||loadP>80?'warn':'ok');
+  setBtn('d_btn',feasible);
+
+  document.getElementById('d_rec_body').innerHTML=`
+<p style="font-size:11px;line-height:1.9;color:var(--txt2)">
+<b>${tl.name}</b> | ${dType} | TSC:${tsc} ×${tf.fF.toFixed(2)}<br>
+<b>L/D:</b> ${ld.toFixed(1)} / <b>ldF:</b> ×${ldF.toFixed(3)}<br>
+<b>f_phys:</b> ${p4(f_phys)} | <b>f_cat:</b> ${p4(f_cat)}<br>
+<b>確定f:</b> <b style="color:#ffd700">${p4(f_real)} mm/rev</b><br>
+<b>破断限界T:</b> ${T_max_drill.toFixed(4)} N·m / <b>実T:</b> ${T_act.toFixed(4)} N·m (${(T_str*100).toFixed(0)}%)
+</p>`;
+}
+
+function calcD() {
+  const D=n('d_D'), L=n('d_L'), holes=parseInt(s('d_holes'))||1;
+  const mat=s('d_mat'), proc=s('d_proc'), tool=s('d_tool');
+  const Pm=n('d_motor'), eta=n('d_eta'), torqMax=n('d_torque_max')||50;
+  const tsc=s('d_tsc'), tsc_p=n('d_tsc_p')||7;
+  const dType=s('d_type');
+  const pilotOn=s('d_pilot')==='1', d_pilot=pilotOn?n('d_pilot_d'):0;
+  const tl=TOOL[tool], db=MAT[mat]||MAT.steel, tf=tscFactor(tsc);
+  const Vc=Math.round(db.vcD[proc]*tl.vcF*tf.vcF);
+  const S=Math.round(Vc*1000/(Math.PI*D));
+  const ld=L/D;
+  const ldF_v=ldFactor(ld,tsc);
+  const torqFactor=dType==='indexable'?0.85:1.0;
+  const pointFactor=dType==='sharp'?1.05:dType==='inco'?1.10:1.0;
+  const D_eff=pilotOn&&d_pilot>0&&d_pilot<D?D-d_pilot:D;
+  const torqFactor2=pilotOn&&d_pilot>0&&d_pilot<D?Math.pow(D_eff/D,1.8):1.0;
+  const S_rps=S/60;
+  const T_max_m=Math.min((Pm*eta*1000)/(2*Math.PI*S_rps), torqMax);
+  const dc=D*0.20;
+  const Ip=Math.PI*(Math.pow(D,4)-Math.pow(dc,4))/32;
+  const tau_a=tl.sigma*tl.rho/2;
+  const T_max_drill=tau_a*Ip/(D/2)/1000;
+  const T_max=Math.min(T_max_m,T_max_drill)*torqFactor*torqFactor2;
+  const rhs_t=T_max/(0.0987*Math.pow(D,1.8)*(db.Ks1/2100)*pointFactor);
+  const f_phys=rhs_t>0?Math.pow(rhs_t,1/0.8)*ldF_v*tf.fF:0;
+  const f_cat=(D_F_CAT[mat]||D_F_CAT.steel)[proc]*ldF_v*tf.fF;
+  const f=Math.min(f_phys,f_cat);
+  const F=Math.round(S*f);
+  const T_act=drillTorque(D,f,mat)*pointFactor*torqFactor2;
+  const Pc=T_act*2*Math.PI*S_rps/1000;
+  const P_av=Pm*eta, loadP=(Pc/P_av)*100;
+  const Ff=2*db.Ks1*Math.pow(f,1-db.mc)*(D*db.mc/4);
+  const sec1=L/F*60, secT=sec1*holes;
+  const TaylorT=taylorLife(Vc,mat);
+
+  // ペックサイクル必要性
+  const needPeck=ld>3&&tsc==='none'||ld>6&&tsc==='low'||ld>10&&tsc==='mid';
+  const peckDepth=D*3;
+
+  document.getElementById('d_rg').innerHTML=`
+    <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🏆 送り速度 F</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item"><div class="res-lbl">切削速度 Vc</div><div class="res-val">${Vc} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">確定 f</div><div class="res-val">${p4(f)} mm/rev</div></div>
+    <div class="res-item"><div class="res-lbl">実トルク T</div><div class="res-val">${T_act.toFixed(4)} N·m</div></div>
+    <div class="res-item"><div class="res-lbl">スラスト力 Ff</div><div class="res-val">${Ff.toFixed(0)} N</div></div>
+    <div class="res-item"><div class="res-lbl">実動力 Pc</div><div class="res-val">${Pc.toFixed(3)} kW</div></div>
+    <div class="res-item"><div class="res-lbl">機械負荷率</div><div class="res-val">${loadP.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">L/D比</div><div class="res-val">${ld.toFixed(1)}</div></div>
+    <div class="res-item"><div class="res-lbl">TSC方式</div><div class="res-val">${tsc}</div></div>
+    <div class="res-item"><div class="res-lbl">1穴時間</div><div class="res-val">${fmtT(sec1)}</div></div>
+    <div class="res-item"><div class="res-lbl">Taylor工具寿命</div><div class="res-val">${TaylorT.toFixed(0)} min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">総時間 (${holes}穴)</div><div class="res-val">${fmtT(secT)}</div></div>`;
+
+  const wc=document.getElementById('d_warns');wc.innerHTML='';
+  if(ld>5) wc.innerHTML+=`<div class="info-box ib-red"><h3>⚠ 深穴 L/D=${ld.toFixed(1)}</h3><p>${needPeck?`ペックサイクル推奨: 1回当たり${peckDepth.toFixed(0)}mm(3D)。`:'TSCにより連続加工可能。'}切りくず詰まりに注意。</p></div>`;
+  if(needPeck&&tsc==='none') wc.innerHTML+=`<div class="info-box ib-yellow"><h3>💧 TSC推奨</h3><p>L/D=${ld.toFixed(1)}でTSCなし。加工効率と工具寿命の向上のためTSC導入を強く推奨します。</p></div>`;
+  if(pilotOn&&d_pilot>0) wc.innerHTML+=`<div class="info-box ib-green"><h3>✅ 下穴効果</h3><p>下穴径${d_pilot}mmにより、実効切削幅${D_eff.toFixed(1)}mm。トルク約${((1-torqFactor2)*100).toFixed(0)}%低減。</p></div>`;
+  if(dType==='indexable') wc.innerHTML+=`<div class="info-box ib-blue"><h3>💡 インデキサブルドリル</h3><p>チップ交換式。高送り・大径向き。外周チップと中心チップで役割分担。チップ摩耗管理が重要。</p></div>`;
+
+  document.getElementById('d_fml').textContent=
+`【ドリル加工 学術物理計算ログ】
+
+ドリル種別: ${dType} | 材質: ${tl.name} | TSC: ${tsc}
+被削材: ${db.name} | L/D: ${ld.toFixed(2)}
+
+▼ Step1: Vc = ${db.vcD[proc]}×${tl.vcF}(tl)×${tf.vcF}(tsc) = ${Vc} m/min
+          S = ${S} rpm
+
+▼ Step2: ドリルねじり破断限界
+  コア比 dc/D = 0.20 → dc = ${(D*0.20).toFixed(2)} mm
+  Ip = π(D⁴-dc⁴)/32 = ${Ip.toFixed(1)} mm⁴
+  τ_allow = σ×ρ/2 = ${tl.sigma}×${tl.rho}/2 = ${tau_a.toFixed(0)} MPa
+  T_drill = τ×Ip/(D/2)/1000 = ${T_max_drill.toFixed(4)} N·m
+
+▼ Step3: 機械トルク限界
+  T_motor = min(Pm×η/(2π×S/60), T_max_spec) = ${T_max_m.toFixed(4)} N·m
+  有効最大T = min × torqFactor(${torqFactor}) × pilotFactor(${torqFactor2.toFixed(3)}) = ${T_max.toFixed(4)} N·m
+
+▼ Step4: L/D補正 × TSC補正
+  L/D = ${ld.toFixed(2)} → ldBase = ${ldFactor(ld,'none').toFixed(3)} → ×tsc_ldF(${tf.ldF}) = ${ldF_v.toFixed(3)}
+  TSC: ${tf.desc}
+
+▼ Step5: f_max逆算 (JIS実験式 T=0.0987×D^1.8×f^0.8×Ks1/2100)
+  f_phys = ${p4(f_phys)} mm/rev | f_cat = ${p4(f_cat)} mm/rev
+  確定 f = ${p4(f)} mm/rev
+
+▼ Step6: F = ${S}×${p4(f)} = ${F} mm/min
+
+▼ Step7: 検証
+  T_act = ${T_act.toFixed(4)} N·m | Ff = ${Ff.toFixed(0)} N
+  Pc = ${Pc.toFixed(3)} kW / 負荷 ${loadP.toFixed(0)}%
+  Taylor T = ${TaylorT.toFixed(0)} min`;
+  document.getElementById('d_result_wrap').classList.remove('hidden');
+  addCompare({type:'ドリル',mat:db.name,D,Vc,S,fz:p4(f),F,Fc:Ff.toFixed(0),Pc:Pc.toFixed(3),load:loadP.toFixed(0),MRR:(Math.PI*(D/2)*(D/2)*F/1000).toFixed(2)+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80});
+}
+
+/* ================================================================
+   ☆ 旋盤 refresh / calc
+================================================================ */
+function refreshT() {
+  const D=n('t_D'), ap=n('t_ap');
+  const mat=s('t_mat'), proc=s('t_proc'), tool=s('t_tool');
+  const kr=parseFloat(s('t_kr'))||75, re=parseFloat(s('t_re'))||0.8;
+  const mode=s('t_mode');
+  const Pm=n('t_motor')||11, eta=n('t_eta')||0.80;
+  const torqMax=n('t_torque_max')||200;
+  const tl=TOOL[tool], db=MAT[mat]||MAT.steel;
+
+  document.getElementById('t_tool_desc').innerHTML=
+    `<b>${tl.name}</b>: ${tl.desc}<br>κr=${kr}° | Rε=${re}mm | モード:${mode}${getToolChips(tool)}`;
+
+  const Vc_b=db.vcT[proc]*tl.vcF;
+  document.getElementById('t_Vc').value=Math.round(Vc_b);
+
+  if(!D||D<=0||!ap||ap<=0){document.getElementById('t_f').value='';setBtn('t_btn',false);return;}
+
+  const Vc=Math.round(Vc_b);
+  const res=fMaxTurning(ap,mat,tool,Vc,Pm,eta,kr);
+  const f_cat=(T_F_CAT[mat]||T_F_CAT.steel)[proc];
+  const f_real=Math.min(res.f, f_cat);
+
+  // 面粗さ
+  const Rz=theorRz(f_real,re);
+  const Ra_theo=(Rz/4).toFixed(3);
+  document.getElementById('t_roughness_val').textContent=
+    `Rz = f²/(8×rε)×1000 = ${f_real.toFixed(4)}²/(8×${re})×1000 = ${Rz.toFixed(2)} μm | Ra≈${Ra_theo} μm`;
+
+  const Fc=turningFc(f_real,ap,mat,kr);
+  const Pc=(Fc*Vc)/(60*1000);
+  const P_av=Pm*eta;
+  const loadP=(Pc/P_av)*100;
+  const toolStress=Fc/res.Fc_max_tool;
+  const TaylorT=taylorLife(Vc,mat);
+
+  // トルクチェック
+  const S_rps=Vc*1000/(Math.PI*D*60);
+  const Torq=Fc*(D/2)/1000; // N·m
+  const torqRatio=Torq/torqMax;
+
+  const feasible=f_real>=0.003&&toolStress<=1.0&&loadP<=100&&torqRatio<=1.0;
+
+  const items=[
+    {l:'モータ限界Fc',v:res.Fc_max_motor.toFixed(0)+' N'},
+    {l:'シャンク限界Fc',v:res.Fc_max_tool.toFixed(0)+' N'},
+    {l:'実切削力Fc',v:Fc.toFixed(0)+' N'},
+    {l:'実動力',v:Pc.toFixed(2)+' kW'},
+    {l:'機械負荷',v:loadP.toFixed(0)+'%'},
+    {l:'工具応力比',v:(toolStress*100).toFixed(0)+'%'},
+    {l:'スピンドルトルク',v:Torq.toFixed(1)+' N·m'},
+    {l:'Taylor寿命',v:TaylorT.toFixed(0)+' min'},
+    {l:'理論Rz',v:Rz.toFixed(2)+' μm'},
+    {l:'κr補正',v:(1+0.15*Math.cos(kr*Math.PI/180)).toFixed(3)+'×'},
+  ];
+  let st,vt;
+  if(!feasible){st='crit';vt='🚫 加工不可';}
+  else if(toolStress>0.80||loadP>80||torqRatio>0.90){st='warn';vt=`⚠ 高負荷 ${loadP.toFixed(0)}% / 応力${(toolStress*100).toFixed(0)}%`;}
+  else{st='ok';vt=`✅ 適正 負荷${loadP.toFixed(0)}% / Rz${Rz.toFixed(1)}μm / 寿命${TaylorT.toFixed(0)}min`;}
+  setPhys('t',items,vt,st);
+  drawBar('t_bar_load','t_pct_load',loadP);
+  drawBar('t_bar_stress','t_pct_stress',toolStress*100);
+  setFeedField('t_f',f_real,!feasible?'ng':toolStress>0.80||loadP>80?'warn':'ok');
+  setBtn('t_btn',feasible);
+
+  document.getElementById('t_rec_body').innerHTML=`
+<p style="font-size:11px;line-height:1.9;color:var(--txt2)">
+<b>${tl.name}</b> | κr=${kr}° | Rε=${re}mm | ${mode}<br>
+<b>f_phys:</b> ${p4(res.f)} | <b>f_cat:</b> ${p4(f_cat)}<br>
+<b>確定f:</b> <b style="color:#ffd700">${p4(f_real)} mm/rev</b><br>
+<b>Fc:</b> ${Fc.toFixed(0)} N | <b>Torq:</b> ${Torq.toFixed(1)} N·m (${(torqRatio*100).toFixed(0)}%)<br>
+<b>Rz:</b> ${Rz.toFixed(2)} μm | <b>Ra≈:</b> ${Ra_theo} μm | <b>T:</b> ${TaylorT.toFixed(0)} min
+</p>`;
+}
+
+function calcT() {
+  const D=n('t_D'), L=n('t_L'), ap=n('t_ap'), pass=parseInt(s('t_pass'))||1;
+  const mat=s('t_mat'), proc=s('t_proc'), tool=s('t_tool');
+  const kr=parseFloat(s('t_kr'))||75, re=parseFloat(s('t_re'))||0.8;
+  const mode=s('t_mode');
+  const Pm=n('t_motor'), eta=n('t_eta'), torqMax=n('t_torque_max')||200;
+  const tl=TOOL[tool], db=MAT[mat]||MAT.steel;
+  const Vc=Math.round(db.vcT[proc]*tl.vcF);
+  const res=fMaxTurning(ap,mat,tool,Vc,Pm,eta,kr);
+  const f_cat=(T_F_CAT[mat]||T_F_CAT.steel)[proc];
+  const f=Math.min(res.f,f_cat);
+  const S=Math.round(Vc*1000/(Math.PI*D));
+  const F=Math.round(S*f);
+  const Fc=turningFc(f,ap,mat,kr);
+  const Pc=(Fc*Vc)/(60*1000);
+  const P_av=Pm*eta, loadP=(Pc/P_av)*100;
+  const toolStress=(Fc/res.Fc_max_tool)*100;
+  const MRR=ap*f*Vc; // cm³/min (ap[mm]×f[mm/rev]×Vc[m/min] = cm³/min)
+  const sec=L*pass/F*60;
+  const Rz=theorRz(f,re);
+  const Ra=(Rz/4).toFixed(3);
+  const TaylorT=taylorLife(Vc,mat);
+  const Torq=Fc*(D/2)/1000;
+  const Kc=1+0.15*Math.cos(kr*Math.PI/180);
+
+  document.getElementById('t_rg').innerHTML=`
+    <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🏆 送り速度 F</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item"><div class="res-lbl">切削速度 Vc</div><div class="res-val">${Vc} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">確定 f</div><div class="res-val">${p4(f)} mm/rev</div></div>
+    <div class="res-item"><div class="res-lbl">実切削力 Fc</div><div class="res-val">${Fc.toFixed(0)} N</div></div>
+    <div class="res-item"><div class="res-lbl">スピンドルトルク</div><div class="res-val">${Torq.toFixed(1)} N·m</div></div>
+    <div class="res-item"><div class="res-lbl">実動力 Pc</div><div class="res-val">${Pc.toFixed(2)} kW</div></div>
+    <div class="res-item"><div class="res-lbl">機械負荷率</div><div class="res-val">${loadP.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">工具応力比</div><div class="res-val">${toolStress.toFixed(0)} %</div></div>
+    <div class="res-item"><div class="res-lbl">理論面粗さ Rz</div><div class="res-val">${Rz.toFixed(2)} μm</div></div>
+    <div class="res-item"><div class="res-lbl">理論面粗さ Ra≈</div><div class="res-val">${Ra} μm</div></div>
+    <div class="res-item"><div class="res-lbl">MRR</div><div class="res-val">${MRR.toFixed(2)} cm³/min</div></div>
+    <div class="res-item"><div class="res-lbl">Taylor工具寿命 T</div><div class="res-val">${TaylorT.toFixed(0)} min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">切削時間</div><div class="res-val">${fmtT(sec)}</div></div>`;
+
+  const wc=document.getElementById('t_warns');wc.innerHTML='';
+  if(toolStress>70) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 工具応力高</h3><p>ap低減 or 突き出し短縮</p></div>';
+  if(loadP>80) wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ 高負荷</h3><p>ap低減推奨</p></div>';
+  if(mode==='int') wc.innerHTML+='<div class="info-box ib-blue"><h3>💡 内径切削</h3><p>ボーリングバーの剛性低下(L/D>4で切削条件を50〜70%に下げることを推奨)。びびり対策として防振バー使用を検討。</p></div>';
+  if(mode==='thr') wc.innerHTML+='<div class="info-box ib-purple"><h3>💡 ねじ切り</h3><p>送りf=ピッチ×cos(ねじ山角)。多重パスで徐々に切込み。初回パスは0.2mm以下の切込みを推奨。</p></div>';
+
+  document.getElementById('t_fml').textContent=
+`【旋盤加工 学術物理計算ログ】
+
+工具: ${tl.name} | κr=${kr}° | Rε=${re}mm | モード:${mode}
+材料: ${db.name} | Ks1=${db.Ks1} N/mm² | mc=${db.mc}
+
+▼ Step1: Vc = ${db.vcT[proc]}×${tl.vcF} = ${Vc} m/min
+
+▼ Step2: κr補正係数 Kc = 1+0.15×cos(${kr}°) = ${Kc.toFixed(4)}
+
+▼ Step3: 工具シャンク強度 (20×20mm標準シャンク)
+  Z_shank = 20×20²/6 = ${(20*400/6).toFixed(0)} mm³
+  σ_eff = ${tl.sigma}×${tl.rho} = ${(tl.sigma*tl.rho).toFixed(0)} MPa
+  M_allow = ${(tl.sigma*tl.rho*20*400/6).toFixed(0)} N·mm
+  Fc_max_tool = M/(2.5×h) = ${res.Fc_max_tool.toFixed(0)} N
+
+▼ Step4: 機械出力制約
+  Fc_max_motor = Pm×η×1000×60/Vc = ${res.Fc_max_motor.toFixed(0)} N
+  有効Fc_max = min = ${res.Fc_max.toFixed(0)} N
+
+▼ Step5: f_max逆算 (Kienzle式+κr補正)
+  Fc = Ks1×f^(1-mc)×ap×Kc
+  f = (Fc_max/(Ks1×ap×Kc))^(1/(1-mc))
+    = (${res.Fc_max.toFixed(0)}/(${db.Ks1}×${ap}×${Kc.toFixed(4)}))^(1/${(1-db.mc).toFixed(2)})
+    = ${p4(res.f)} mm/rev
+  f_cat = ${p4(f_cat)} | 確定 f = ${p4(f)} mm/rev
+
+▼ Step6: F = ${S}×${p4(f)} = ${F} mm/min
+
+▼ Step7: 面粗さ (Brammertz式)
+  Rz = f²/(8×rε) = ${p4(f)}²/(8×${re})×1000 = ${Rz.toFixed(2)} μm
+  Ra ≈ Rz/4 = ${Ra} μm
+
+▼ Step8: Taylor工具寿命
+  T = ${db.C_T}/Vc^(1/${db.n_T}) = ${TaylorT.toFixed(0)} min @ Vc=${Vc} m/min
+
+▼ Step9: 検証
+  Fc = ${db.Ks1}×${p4(f)}^${(1-db.mc).toFixed(2)}×${ap}×${Kc.toFixed(4)} = ${Fc.toFixed(0)} N
+  Torq = Fc×(D/2)/1000 = ${Torq.toFixed(1)} N·m
+  Pc = ${Pc.toFixed(2)} kW / 負荷${loadP.toFixed(0)}%
+  MRR = ap×f×Vc = ${ap}×${p4(f)}×${Vc} = ${MRR.toFixed(2)} cm³/min`;
+  document.getElementById('t_result_wrap').classList.remove('hidden');
+  addCompare({type:'旋盤('+mode+')',mat:db.name,D,Vc,S,fz:p4(f),F,Fc:Fc.toFixed(0),Pc:Pc.toFixed(2),load:loadP.toFixed(0),MRR:MRR.toFixed(2)+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80&&toolStress<=80});
+}
+
+/* ================================================================
+   ☆ タップ加工 データベース・計算
+================================================================ */
+
+/* ねじ規格データベース
+   D=公称(基準)径[mm], P=ピッチ[mm], cat=分類, name=表示名
+   drill=規格指定下穴径[mm](管用ねじのみ), taper=テーパねじフラグ
+   cat: 'M'=メートル並目 'Mf'=メートル細目 'UNC'/'UNF'=ユニファイ
+        'G'=管用平行(JIS B 0202) 'Rc'=管用テーパ(JIS B 0203)
+   angle: ねじ山角(60°=メートル/ユニファイ, 55°=管用ウィットワース) */
+const THREADS = {
+  // ===== メートル並目 (JIS B 0205 / ISO 261) =====
+  'M1_0.25':{D:1.0,P:0.25,cat:'M',angle:60,name:'M1 × P0.25'},
+  'M1.2_0.25':{D:1.2,P:0.25,cat:'M',angle:60,name:'M1.2 × P0.25'},
+  'M1.4_0.3':{D:1.4,P:0.3,cat:'M',angle:60,name:'M1.4 × P0.3'},
+  'M1.6_0.35':{D:1.6,P:0.35,cat:'M',angle:60,name:'M1.6 × P0.35'},
+  'M2_0.4':{D:2.0,P:0.4,cat:'M',angle:60,name:'M2 × P0.4'},
+  'M2.5_0.45':{D:2.5,P:0.45,cat:'M',angle:60,name:'M2.5 × P0.45'},
+  'M3_0.5':{D:3.0,P:0.5,cat:'M',angle:60,name:'M3 × P0.5'},
+  'M3.5_0.6':{D:3.5,P:0.6,cat:'M',angle:60,name:'M3.5 × P0.6'},
+  'M4_0.7':{D:4.0,P:0.7,cat:'M',angle:60,name:'M4 × P0.7'},
+  'M5_0.8':{D:5.0,P:0.8,cat:'M',angle:60,name:'M5 × P0.8'},
+  'M6_1.0':{D:6.0,P:1.0,cat:'M',angle:60,name:'M6 × P1.0'},
+  'M7_1.0':{D:7.0,P:1.0,cat:'M',angle:60,name:'M7 × P1.0'},
+  'M8_1.25':{D:8.0,P:1.25,cat:'M',angle:60,name:'M8 × P1.25'},
+  'M10_1.5':{D:10.0,P:1.5,cat:'M',angle:60,name:'M10 × P1.5'},
+  'M12_1.75':{D:12.0,P:1.75,cat:'M',angle:60,name:'M12 × P1.75'},
+  'M14_2.0':{D:14.0,P:2.0,cat:'M',angle:60,name:'M14 × P2.0'},
+  'M16_2.0':{D:16.0,P:2.0,cat:'M',angle:60,name:'M16 × P2.0'},
+  'M18_2.5':{D:18.0,P:2.5,cat:'M',angle:60,name:'M18 × P2.5'},
+  'M20_2.5':{D:20.0,P:2.5,cat:'M',angle:60,name:'M20 × P2.5'},
+  'M22_2.5':{D:22.0,P:2.5,cat:'M',angle:60,name:'M22 × P2.5'},
+  'M24_3.0':{D:24.0,P:3.0,cat:'M',angle:60,name:'M24 × P3.0'},
+  'M27_3.0':{D:27.0,P:3.0,cat:'M',angle:60,name:'M27 × P3.0'},
+  'M30_3.5':{D:30.0,P:3.5,cat:'M',angle:60,name:'M30 × P3.5'},
+  'M33_3.5':{D:33.0,P:3.5,cat:'M',angle:60,name:'M33 × P3.5'},
+  'M36_4.0':{D:36.0,P:4.0,cat:'M',angle:60,name:'M36 × P4.0'},
+  'M39_4.0':{D:39.0,P:4.0,cat:'M',angle:60,name:'M39 × P4.0'},
+  'M42_4.5':{D:42.0,P:4.5,cat:'M',angle:60,name:'M42 × P4.5'},
+  'M45_4.5':{D:45.0,P:4.5,cat:'M',angle:60,name:'M45 × P4.5'},
+  'M48_5.0':{D:48.0,P:5.0,cat:'M',angle:60,name:'M48 × P5.0'},
+  'M52_5.0':{D:52.0,P:5.0,cat:'M',angle:60,name:'M52 × P5.0'},
+  'M56_5.5':{D:56.0,P:5.5,cat:'M',angle:60,name:'M56 × P5.5'},
+  'M60_5.5':{D:60.0,P:5.5,cat:'M',angle:60,name:'M60 × P5.5'},
+  'M64_6.0':{D:64.0,P:6.0,cat:'M',angle:60,name:'M64 × P6.0'},
+  'M68_6.0':{D:68.0,P:6.0,cat:'M',angle:60,name:'M68 × P6.0'},
+  // ===== メートル細目 (JIS B 0207 / ISO 261 fine) =====
+  'M4_0.5f':{D:4.0,P:0.5,cat:'Mf',angle:60,name:'M4 × P0.5 (細目)'},
+  'M5_0.5f':{D:5.0,P:0.5,cat:'Mf',angle:60,name:'M5 × P0.5 (細目)'},
+  'M6_0.75f':{D:6.0,P:0.75,cat:'Mf',angle:60,name:'M6 × P0.75 (細目)'},
+  'M8_1.0f':{D:8.0,P:1.0,cat:'Mf',angle:60,name:'M8 × P1.0 (細目)'},
+  'M8_0.75f':{D:8.0,P:0.75,cat:'Mf',angle:60,name:'M8 × P0.75 (細目)'},
+  'M10_1.25f':{D:10.0,P:1.25,cat:'Mf',angle:60,name:'M10 × P1.25 (細目)'},
+  'M10_1.0f':{D:10.0,P:1.0,cat:'Mf',angle:60,name:'M10 × P1.0 (細目)'},
+  'M12_1.5f':{D:12.0,P:1.5,cat:'Mf',angle:60,name:'M12 × P1.5 (細目)'},
+  'M12_1.25f':{D:12.0,P:1.25,cat:'Mf',angle:60,name:'M12 × P1.25 (細目)'},
+  'M14_1.5f':{D:14.0,P:1.5,cat:'Mf',angle:60,name:'M14 × P1.5 (細目)'},
+  'M16_1.5f':{D:16.0,P:1.5,cat:'Mf',angle:60,name:'M16 × P1.5 (細目)'},
+  'M18_1.5f':{D:18.0,P:1.5,cat:'Mf',angle:60,name:'M18 × P1.5 (細目)'},
+  'M20_1.5f':{D:20.0,P:1.5,cat:'Mf',angle:60,name:'M20 × P1.5 (細目)'},
+  'M22_1.5f':{D:22.0,P:1.5,cat:'Mf',angle:60,name:'M22 × P1.5 (細目)'},
+  'M24_2.0f':{D:24.0,P:2.0,cat:'Mf',angle:60,name:'M24 × P2.0 (細目)'},
+  'M27_2.0f':{D:27.0,P:2.0,cat:'Mf',angle:60,name:'M27 × P2.0 (細目)'},
+  'M30_2.0f':{D:30.0,P:2.0,cat:'Mf',angle:60,name:'M30 × P2.0 (細目)'},
+  'M33_2.0f':{D:33.0,P:2.0,cat:'Mf',angle:60,name:'M33 × P2.0 (細目)'},
+  'M36_3.0f':{D:36.0,P:3.0,cat:'Mf',angle:60,name:'M36 × P3.0 (細目)'},
+  // ===== ユニファイ並目 UNC (JIS B 0206 / ASME B1.1) =====
+  'UNC_4':{D:2.845,P:0.635,cat:'UNC',angle:60,name:'No.4-40 UNC'},
+  'UNC_6':{D:3.505,P:0.7938,cat:'UNC',angle:60,name:'No.6-32 UNC'},
+  'UNC_8':{D:4.166,P:0.7938,cat:'UNC',angle:60,name:'No.8-32 UNC'},
+  'UNC_10':{D:4.826,P:1.0583,cat:'UNC',angle:60,name:'No.10-24 UNC'},
+  'UNC_1/4':{D:6.350,P:1.270,cat:'UNC',angle:60,name:'1/4-20 UNC'},
+  'UNC_5/16':{D:7.938,P:1.4111,cat:'UNC',angle:60,name:'5/16-18 UNC'},
+  'UNC_3/8':{D:9.525,P:1.5875,cat:'UNC',angle:60,name:'3/8-16 UNC'},
+  'UNC_7/16':{D:11.113,P:1.8143,cat:'UNC',angle:60,name:'7/16-14 UNC'},
+  'UNC_1/2':{D:12.700,P:1.9538,cat:'UNC',angle:60,name:'1/2-13 UNC'},
+  'UNC_5/8':{D:15.875,P:2.3091,cat:'UNC',angle:60,name:'5/8-11 UNC'},
+  'UNC_3/4':{D:19.050,P:2.5400,cat:'UNC',angle:60,name:'3/4-10 UNC'},
+  'UNC_1':{D:25.400,P:3.1750,cat:'UNC',angle:60,name:'1"-8 UNC'},
+  // ===== ユニファイ細目 UNF (JIS B 0208 / ASME B1.1) =====
+  'UNF_6':{D:3.505,P:0.6350,cat:'UNF',angle:60,name:'No.6-40 UNF'},
+  'UNF_8':{D:4.166,P:0.7056,cat:'UNF',angle:60,name:'No.8-36 UNF'},
+  'UNF_10':{D:4.826,P:0.7938,cat:'UNF',angle:60,name:'No.10-32 UNF'},
+  'UNF_1/4':{D:6.350,P:0.9071,cat:'UNF',angle:60,name:'1/4-28 UNF'},
+  'UNF_5/16':{D:7.938,P:1.0583,cat:'UNF',angle:60,name:'5/16-24 UNF'},
+  'UNF_3/8':{D:9.525,P:1.0583,cat:'UNF',angle:60,name:'3/8-24 UNF'},
+  'UNF_7/16':{D:11.113,P:1.2700,cat:'UNF',angle:60,name:'7/16-20 UNF'},
+  'UNF_1/2':{D:12.700,P:1.2700,cat:'UNF',angle:60,name:'1/2-20 UNF'},
+  'UNF_5/8':{D:15.875,P:1.4111,cat:'UNF',angle:60,name:'5/8-18 UNF'},
+  'UNF_3/4':{D:19.050,P:1.5875,cat:'UNF',angle:60,name:'3/4-16 UNF'},
+  // ===== 管用平行ねじ G / PF (JIS B 0202 / ISO 228, 55°ウィットワース) =====
+  'G1/16':{D:7.723,P:0.9071,cat:'G',angle:55,drill:6.8,name:'G1/16 (管用平行)'},
+  'G1/8':{D:9.728,P:0.9071,cat:'G',angle:55,drill:8.8,name:'G1/8 (管用平行)'},
+  'G1/4':{D:13.157,P:1.3368,cat:'G',angle:55,drill:11.8,name:'G1/4 (管用平行)'},
+  'G3/8':{D:16.662,P:1.3368,cat:'G',angle:55,drill:15.25,name:'G3/8 (管用平行)'},
+  'G1/2':{D:20.955,P:1.8143,cat:'G',angle:55,drill:19.0,name:'G1/2 (管用平行)'},
+  'G5/8':{D:22.911,P:1.8143,cat:'G',angle:55,drill:21.0,name:'G5/8 (管用平行)'},
+  'G3/4':{D:26.441,P:1.8143,cat:'G',angle:55,drill:24.5,name:'G3/4 (管用平行)'},
+  'G7/8':{D:30.201,P:1.8143,cat:'G',angle:55,drill:28.25,name:'G7/8 (管用平行)'},
+  'G1':{D:33.249,P:2.3091,cat:'G',angle:55,drill:30.75,name:'G1 (管用平行)'},
+  'G1.1/4':{D:41.910,P:2.3091,cat:'G',angle:55,drill:39.5,name:'G1.1/4 (管用平行)'},
+  'G1.1/2':{D:47.803,P:2.3091,cat:'G',angle:55,drill:45.5,name:'G1.1/2 (管用平行)'},
+  'G2':{D:59.614,P:2.3091,cat:'G',angle:55,drill:57.5,name:'G2 (管用平行)'},
+  'G2.1/2':{D:75.184,P:2.3091,cat:'G',angle:55,drill:73.0,name:'G2.1/2 (管用平行)'},
+  'G3':{D:87.884,P:2.3091,cat:'G',angle:55,drill:85.5,name:'G3 (管用平行)'},
+  // ===== 管用テーパねじ Rc / PT (JIS B 0203, 55°ウィットワース・テーパ1/16) =====
+  'Rc1/16':{D:7.723,P:0.9071,cat:'Rc',angle:55,drill:6.8,taper:true,name:'Rc1/16 (管用テーパ)'},
+  'Rc1/8':{D:9.728,P:0.9071,cat:'Rc',angle:55,drill:8.4,taper:true,name:'Rc1/8 (管用テーパ)'},
+  'Rc1/4':{D:13.157,P:1.3368,cat:'Rc',angle:55,drill:11.2,taper:true,name:'Rc1/4 (管用テーパ)'},
+  'Rc3/8':{D:16.662,P:1.3368,cat:'Rc',angle:55,drill:14.75,taper:true,name:'Rc3/8 (管用テーパ)'},
+  'Rc1/2':{D:20.955,P:1.8143,cat:'Rc',angle:55,drill:18.25,taper:true,name:'Rc1/2 (管用テーパ)'},
+  'Rc3/4':{D:26.441,P:1.8143,cat:'Rc',angle:55,drill:23.75,taper:true,name:'Rc3/4 (管用テーパ)'},
+  'Rc1':{D:33.249,P:2.3091,cat:'Rc',angle:55,drill:30.0,taper:true,name:'Rc1 (管用テーパ)'},
+  'Rc1.1/4':{D:41.910,P:2.3091,cat:'Rc',angle:55,drill:38.75,taper:true,name:'Rc1.1/4 (管用テーパ)'},
+  'Rc1.1/2':{D:47.803,P:2.3091,cat:'Rc',angle:55,drill:44.5,taper:true,name:'Rc1.1/2 (管用テーパ)'},
+  'Rc2':{D:59.614,P:2.3091,cat:'Rc',angle:55,drill:56.0,taper:true,name:'Rc2 (管用テーパ)'},
+  'Rc2.1/2':{D:75.184,P:2.3091,cat:'Rc',angle:55,drill:72.0,taper:true,name:'Rc2.1/2 (管用テーパ)'},
+  'Rc3':{D:87.884,P:2.3091,cat:'Rc',angle:55,drill:84.5,taper:true,name:'Rc3 (管用テーパ)'},
+};
+/* 旧名互換 */
+const METRIC_THREADS = THREADS;
+/* 分類グループ表示名 (プルダウンoptgroup用) */
+const THREAD_GROUPS = {
+  M:'メートル並目ねじ (M)', Mf:'メートル細目ねじ (M×細目)',
+  UNC:'ユニファイ並目ねじ (UNC)', UNF:'ユニファイ細目ねじ (UNF)',
+  G:'管用平行ねじ (G / PF)', Rc:'管用テーパねじ (Rc / PT) ★',
+};
+
+/* タップ工具材質 (tau_allow: せん断許容応力[MPa]) */
+const TAP_TOOL = {
+  hss:    {name:'HSS',              tau:300, vcF:1.00, desc:'汎用。靭性高。M1〜M68対応。非鉄〜鋼向き。'},
+  cobalt: {name:'コバルトハイス',    tau:360, vcF:1.30, desc:'耐熱650℃。SUS・Ti・Inconel有効。靭性◎。'},
+  carbide:{name:'超硬ソリッド',      tau:280, vcF:2.00, desc:'高速加工。脆性あり。Al・鋳鉄・鋼向き。'},
+  coated: {name:'AlTiNコーティング超硬',tau:270,vcF:2.80,desc:'最高速度域。SUS・鋼長寿命。M3以上推奨。'},
+};
+
+/* タップ加工材料データ (Km: トルク係数, Vc推奨範囲[m/min]) */
+const TAP_MAT = {
+  al:     {Km:0.50,VcL:15,VcH:25,VcLc:40,VcHc:60,name:'アルミ合金'},
+  al7075: {Km:0.55,VcL:12,VcH:22,VcLc:35,VcHc:55,name:'A7075'},
+  steel:  {Km:1.00,VcL:8, VcH:14,VcLc:15,VcHc:25,name:'S45C/SS400'},
+  steel_h:{Km:1.30,VcL:6, VcH:10,VcLc:12,VcHc:20,name:'SCM440 HRC30'},
+  steel_hh:{Km:2.00,VcL:3,VcH:6, VcLc:8, VcHc:14,name:'SKD11 HRC55'},
+  sus304: {Km:1.60,VcL:5, VcH:8, VcLc:10,VcHc:18,name:'SUS304'},
+  sus316: {Km:1.70,VcL:4, VcH:7, VcLc:9, VcHc:16,name:'SUS316L'},
+  cast:   {Km:0.60,VcL:10,VcH:18,VcLc:20,VcHc:35,name:'鋳鉄 FC250'},
+  ti:     {Km:2.00,VcL:4, VcH:7, VcLc:8, VcHc:12,name:'Ti-6Al-4V'},
+  ni:     {Km:2.80,VcL:2, VcH:4, VcLc:5, VcHc:8, name:'Inconel 718'},
+  cu:     {Km:0.45,VcL:20,VcH:35,VcLc:50,VcHc:80,name:'銅合金 C3604'},
+};
+
+/* タップ種別係数
+   Ct: トルク係数 / vcF: 切削速度補正 / forCat: 推奨ねじ分類 */
+const TAP_TYPE = {
+  spiral:    {Ct:1.00,vcF:1.00,name:'スパイラルタップ',   desc:'止まり穴標準。切りくずを上方排出。靭性必要。'},
+  point:     {Ct:0.85,vcF:1.15,name:'ポイントタップ',     desc:'貫通穴標準。切りくずを前方押出し。高速向き。'},
+  str:       {Ct:1.10,vcF:0.80,name:'ストレートフルート', desc:'精密加工用。切りくず管理が必要。低速推奨。'},
+  form:      {Ct:0.70,vcF:1.10,name:'盛上げタップ',       desc:'切りくずゼロ。止まり穴最適。下穴径やや大。'},
+  pipe_str:  {Ct:1.25,vcF:0.75,name:'管用平行タップ(ストレート)', desc:'管用平行ねじG用。長いねじ部を一度に切削。低速・潤滑重視。'},
+  pipe_sp:   {Ct:1.10,vcF:0.85,name:'管用平行タップ(スパイラル)', desc:'管用平行ねじG用。止まり穴・切りくず排出性◎。'},
+  pipe_taper:{Ct:1.55,vcF:0.60,name:'管用テーパタップ',   desc:'管用テーパねじRc専用。全刃が漸進的に全山切削→トルク大。極低速・高潤滑必須。'},
+};
+
+/* クーラント補正係数 */
+const TAP_COOL = {
+  ext: {fC:1.00,desc:'外部クーラント（標準）'},
+  dry: {fC:1.30,desc:'ドライ/エアーブロー（トルク+30%）'},
+  tsc: {fC:0.80,desc:'内部高圧クーラント（トルク-20%）'},
+  mql: {fC:0.90,desc:'MQL最小量潤滑（トルク-10%）'},
+};
+
+/* タップコア径 [mm] (ねじ谷径相当 = タップ心厚の目安)
+   60°ねじ(M/UN): dc = D - 1.2269×P  (ISO 724 d3式)
+   55°ねじ(G/Rc): dc = D - 1.281×P   (ウィットワース全山深さ 0.6403P×2) */
+function tapCoreDia(D, P, angle){
+  const k = (angle===55) ? 1.281 : 1.2269;
+  return D - k*P;
+}
+
+/* タップ破断トルク [N·m] (材料力学: 中実円形断面のねじり) */
+function tapBreakTorque(D, P, toolKey, angle){
+  const tl = TAP_TOOL[toolKey]||TAP_TOOL.hss;
+  const dc = tapCoreDia(D, P, angle);
+  if(dc<=0) return 0;
+  // T = τ_allow × (π × dc³/16) [N·mm] → /1000 → [N·m]
+  return tl.tau * Math.PI * Math.pow(dc,3) / 16 / 1000;
+}
+
+/* タッピングトルク [N·m]  (JIS B 4430 系経験式)
+   Tm = 0.035 × Ct × Km × D^2.2 × P^0.8 × fC × taperF
+   taperF: 管用テーパねじは全刃が漸進的に全山切削するため割増 */
+function tapTorque(D, P, typeKey, matKey, coolKey, isTaper){
+  const tt = TAP_TYPE[typeKey]||TAP_TYPE.spiral;
+  const tm = TAP_MAT[matKey]||TAP_MAT.steel;
+  const tc = TAP_COOL[coolKey]||TAP_COOL.ext;
+  const taperF = isTaper ? 1.30 : 1.0;
+  return 0.035 * tt.Ct * tm.Km * Math.pow(D,2.2) * Math.pow(P,0.8) * tc.fC * taperF;
+}
+
+/* 推奨Vc [m/min] — タップ種別vcF・ねじ分類補正込み */
+function tapVcRec(matKey, toolKey, typeKey, cat){
+  const tm = TAP_MAT[matKey]||TAP_MAT.steel;
+  const isCoated = (toolKey==='coated'||toolKey==='carbide');
+  const toolF = TAP_TOOL[toolKey]?TAP_TOOL[toolKey].vcF:1.0;
+  const typeF = TAP_TYPE[typeKey]?TAP_TYPE[typeKey].vcF:1.0;
+  // 管用ねじ分類補正: テーパは特に低速
+  const catF = cat==='Rc'?0.55 : cat==='G'?0.75 : 1.0;
+  let lo,hi;
+  if(isCoated){ lo=tm.VcLc; hi=tm.VcHc; }
+  else        { lo=tm.VcL*toolF; hi=tm.VcH*toolF; }
+  lo *= typeF*catF; hi *= typeF*catF;
+  return {lo:Math.max(1,Math.round(lo)), hi:Math.max(2,Math.round(hi)), rec:Math.max(1,Math.round((lo+hi)/2))};
+}
+
+/* 下穴径推奨 [mm] — 許容範囲を「大きい径側」に設定
+   方針: 下穴が大きい → ねじ係合率↓ → タッピングトルク↓ → タップ折損リスク大幅減。
+         実用上ねじ係合率60〜80%で強度は十分なため、安全側=大きい径を優先する。
+   返り値: lo=許容下限(=標準/最小径) rec=推奨(やや大きめ) hi=許容上限(最大径・最も安全)
+           tight=強度最優先時のみ可(下限以下) fixed=管用規格指定ドリルか
+   照合: YAMAWA/OSG タップ用ドリル径カタログ準拠 */
+function tapPilotDia(D, P, typeKey, th){
+  // --- 管用ねじ(G/Rc): JIS/メーカー指定ストレートドリル径が基準 ---
+  if(th && th.drill){
+    const d = th.drill;
+    return {
+      lo:  p2(d),                 // JIS B 0202/0203 規格標準ドリル径 = 許容下限
+      rec: p2(d + 0.10*P),        // 推奨(やや大きめ)
+      hi:  p2(d + 0.30*P),        // 許容上限(最大・トルク最小・タップ最保護)
+      tight: p2(d - 0.10*P),      // 強度最優先時のみ
+      fixed:true,
+      note: th.taper
+        ? '管用テーパねじ JIS B 0203 指定ドリル径基準。許容範囲を大きい径側に設定し高トルクのテーパタップを保護'
+        : '管用平行ねじ JIS B 0202 指定ドリル径基準。許容範囲を大きい径側に設定'
+    };
+  }
+  // --- 盛上げ(転造)タップ: 切りくずなし。下穴 ≒ D-0.45P (YAMAWA/OSG転造タップ準拠) ---
+  if(typeKey==='form'){
+    return {
+      lo:  p2(D - 0.55*P),
+      rec: p2(D - 0.45*P),        // 転造タップメーカー推奨域
+      hi:  p2(D - 0.35*P),        // 許容上限(最大)
+      tight: p2(D - 0.62*P),
+      fixed:false,
+      note:'盛上げ(転造)タップ。許容範囲を大きい径側に設定 — かじり・過大トルクを防止 (YAMAWA/OSG転造タップ準拠)'
+    };
+  }
+  // --- 切削タップ(M並目/細目・UNC/UNF): 標準 D-P。許容範囲を大きい径側へ ---
+  return {
+    lo:  p2(D - 1.00*P),          // 標準 D-P (約78%係合) = 許容下限
+    rec: p2(D - 0.90*P),          // 推奨(やや大きめ・約70%係合)
+    hi:  p2(D - 0.75*P),          // 許容上限(最大・約58%係合・タップ最保護)
+    tight: p2(D - 1.08*P),        // 強度最優先時のみ(約85%係合)
+    fixed:false,
+    note:'切削タップ。標準=D-P (JIS B 0209/ISO 724)。許容範囲を大きい径側に設定 — タップ折損リスク低減を優先 (係合率60〜80%で実用強度十分)'
+  };
+}
+
+function refreshTap(){
+  const tkey = s('tap_thread')||'M6_1.0';
+  const th = THREADS[tkey]||{D:6,P:1.0,cat:'M',angle:60,name:tkey};
+  const D=th.D, P=th.P, cat=th.cat||'M', isTaper=!!th.taper, isPipe=(cat==='G'||cat==='Rc');
+  const typeKey=s('tap_type')||'spiral';
+  const toolKey=s('tap_tool')||'hss';
+  const matKey=s('tap_mat')||'steel';
+  const coolKey=s('tap_cool')||'ext';
+  const nmax=n('tap_nmax')||6000;
+  const tt=TAP_TYPE[typeKey], tl=TAP_TOOL[toolKey];
+  const tm=TAP_MAT[matKey]||TAP_MAT.steel, tc=TAP_COOL[coolKey];
+
+  document.getElementById('tap_tool_desc').innerHTML=
+    `<b>${tl.name}</b>: ${tl.desc}<br><b>${tt.name}</b>: ${tt.desc}`
+    +`<br><b>ねじ規格:</b> ${th.name} — ${THREAD_GROUPS[cat]||cat} / ねじ山角${th.angle||60}°`
+    +(isTaper?'<br><span style="color:#fca5a5">⚠ テーパねじ: 全刃が漸進的に全山を切削 → トルクが大きい。極低速・高潤滑で加工。</span>':'');
+  document.getElementById('tap_P').value=P;
+
+  // 推奨Vc・S・F (ねじ分類・タップ種別補正込み)
+  const vcr=tapVcRec(matKey,toolKey,typeKey,cat);
+  const Vc=vcr.rec;
+  const S_theo=Math.round(Vc*1000/(Math.PI*D));
+  const S=Math.min(S_theo,nmax);
+  const Vc_act=Math.round(S*Math.PI*D/1000*10)/10;
+  const F=Math.round(S*P*10)/10;
+
+  document.getElementById('tap_Vc').value=Vc_act;
+  document.getElementById('tap_S').value=S;
+  document.getElementById('tap_F').value=F;
+
+  // 下穴推奨 (許容範囲を大きい径側に設定)
+  const pilot=tapPilotDia(D,P,typeKey,th);
+  document.getElementById('tap_pilot_panel').innerHTML=
+    `<b>推奨下穴径:</b> <span style="color:#ffd700;font-size:16px;font-weight:800">${pilot.rec} mm</span>
+     <span style="color:var(--txt3);font-size:10px">（やや大きめ・タップ保護優先）</span><br>
+     <b>許容範囲:</b> <span style="color:#86efac;font-weight:700;font-size:13px">${pilot.lo} 〜 ${pilot.hi} mm</span>
+     <span style="color:var(--txt3);font-size:10px">（下限=${pilot.fixed?'JIS規格標準':'標準 D-P'} ／ 上限=最大径・トルク最小・最も安全）</span><br>
+     <span style="color:var(--txt3);font-size:10px">${pilot.note}</span><br>
+     <span style="color:#fcd34d;font-size:10px">💡 迷ったら大きい径を選択 — 下穴大→係合率↓→トルク↓→タップ折損リスク↓。強度を最優先する場合のみ ${pilot.tight}mm まで縮小可。</span>
+     ${isTaper?'<br><span style="color:#fcd34d;font-size:10px">⚠ テーパねじはストレートドリル下穴が標準。リーマ仕上げ不要。ねじゲージ(管用テーパ用)で深さ管理。</span>':''}
+     ${typeKey==='form'?'<br><span style="color:#fcd34d;font-size:10px">⚠ 盛上げタップは切削タップより大きい下穴径。下穴が小さいとトルク急増・かじり発生。</span>':''}`;
+
+  // トルク計算
+  const Tm=tapTorque(D,P,typeKey,matKey,coolKey,isTaper);
+  const Tb=tapBreakTorque(D,P,toolKey,th.angle);
+  const torqRatio=Tb>0?Tm/Tb:999;
+  const dc=tapCoreDia(D,P,th.angle);
+
+  const items=[
+    {l:cat==='Rc'||cat==='G'?'基準径 D':'公称径 D',v:D+' mm'},
+    {l:'ピッチ P',v:P+' mm'},
+    {l:'コア径 dc',v:dc.toFixed(3)+' mm'},
+    {l:'推奨Vc',v:vcr.lo+'〜'+vcr.hi+' m/min'},
+    {l:'回転数 S',v:S+(S>=nmax?' (上限制限)':'')+' rpm'},
+    {l:'同期送り F',v:F+' mm/min'},
+    {l:'タッピングTm',v:Tm.toFixed(3)+' N·m'},
+    {l:'破断限界Tb',v:Tb.toFixed(3)+' N·m'},
+    {l:'トルク安全率',v:(torqRatio*100).toFixed(0)+'%'},
+    {l:'推奨下穴径',v:pilot.rec+' mm'},
+    {l:'下穴許容範囲',v:pilot.lo+'〜'+pilot.hi+' mm'},
+  ];
+  let st,vt;
+  if(torqRatio>1.0){st='crit';vt='🚫 タップ破断危険 — 条件変更必須';}
+  else if(torqRatio>0.80){st='ng';vt='⚠ 破断リスク高 ('+( torqRatio*100).toFixed(0)+'%) — 速度低減・クーラント強化';}
+  else if(torqRatio>0.60){st='warn';vt='⚠ 注意域 ('+( torqRatio*100).toFixed(0)+'%) — 慎重に加工';}
+  else{st='ok';vt='✅ 安全 — トルク安全率'+(torqRatio*100).toFixed(0)+'% (破断限界の'+(100-torqRatio*100).toFixed(0)+'%余裕)';}
+
+  setPhys('tap',items,vt,st);
+  drawBar('tap_bar_torq','tap_pct_torq',torqRatio*100);
+
+  const Vc_pct=Math.round((Vc_act-vcr.lo)/((vcr.hi-vcr.lo)||1)*100);
+  document.getElementById('tap_bar_vc').style.width=Math.max(5,Math.min(100,Vc_pct))+'%';
+  document.getElementById('tap_pct_vc').textContent='適正域内';
+
+  // ねじ分類とタップ種別の整合チェック
+  let matchWarn='';
+  if(cat==='Rc'&&typeKey!=='pipe_taper') matchWarn='<br><span style="color:#fca5a5">⚠ 管用テーパねじには「管用テーパタップ」を選択してください</span>';
+  else if(cat==='G'&&typeKey!=='pipe_str'&&typeKey!=='pipe_sp') matchWarn='<br><span style="color:#fca5a5">⚠ 管用平行ねじには「管用平行タップ」を選択してください</span>';
+  else if((typeKey==='pipe_taper'||typeKey==='pipe_str'||typeKey==='pipe_sp')&&!isPipe) matchWarn='<br><span style="color:#fca5a5">⚠ 管用タップは管用ねじ(G/Rc)に使用してください</span>';
+
+  document.getElementById('tap_rec_body').innerHTML=`
+<p style="font-size:11px;line-height:2.0;color:var(--txt2)">
+<b>ねじ:</b> ${th.name} | <b>タップ:</b> ${tl.name} | <b>種別:</b> ${tt.name}<br>
+<b>被削材:</b> ${tm.name} | <b>クーラント:</b> ${tc.desc}<br>
+<b>推奨Vc範囲:</b> ${vcr.lo}〜${vcr.hi} m/min | <b>使用Vc:</b> ${Vc_act} m/min<br>
+<b>Tm = 0.035×${tt.Ct}(Ct)×${tm.Km}(Km)×${D}^2.2×${P}^0.8×${tc.fC}(cool)${isTaper?'×1.30(テーパ)':''}</b><br>
+<b>タッピングトルク Tm:</b> <span style="color:#ffd700;font-weight:800">${Tm.toFixed(3)} N·m</span><br>
+<b>破断限界トルク Tb:</b> ${Tb.toFixed(3)} N·m &nbsp;→&nbsp; 安全率: <span style="color:${torqRatio<0.6?'#86efac':torqRatio<0.8?'#fcd34d':'#fca5a5'}">${(torqRatio*100).toFixed(0)}%</span>${matchWarn}
+</p>`;
+}
+
+function calcTap(){
+  const tkey=s('tap_thread')||'M6_1.0';
+  const th=THREADS[tkey]||{D:6,P:1.0,cat:'M',angle:60,name:tkey};
+  const D=th.D, P=th.P, cat=th.cat||'M', isTaper=!!th.taper, isPipe=(cat==='G'||cat==='Rc');
+  const typeKey=s('tap_type')||'spiral';
+  const toolKey=s('tap_tool')||'hss';
+  const matKey=s('tap_mat')||'steel';
+  const coolKey=s('tap_cool')||'ext';
+  const holeType=s('tap_hole')||'through';
+  const Le=n('tap_le')||12, depth=n('tap_depth')||20;
+  const holes=parseInt(document.getElementById('tap_holes').value)||1;
+  const modeKey=s('tap_mode')||'rigid';
+  const nmax=n('tap_nmax')||6000;
+
+  const tt=TAP_TYPE[typeKey], tl=TAP_TOOL[toolKey];
+  const tm=TAP_MAT[matKey]||TAP_MAT.steel, tc=TAP_COOL[coolKey];
+
+  const vcr=tapVcRec(matKey,toolKey,typeKey,cat);
+  const Vc=vcr.rec;
+  const S_theo=Math.round(Vc*1000/(Math.PI*D));
+  const S=Math.min(S_theo,nmax);
+  const Vc_act=Math.round(S*Math.PI*D/1000*10)/10;
+  const F=Math.round(S*P*10)/10;
+
+  const Tm=tapTorque(D,P,typeKey,matKey,coolKey,isTaper);
+  const Tb=tapBreakTorque(D,P,toolKey,th.angle);
+  const torqRatio=Tb>0?Tm/Tb:999;
+  const dc=tapCoreDia(D,P,th.angle);
+  const pilot=tapPilotDia(D,P,typeKey,th);
+
+  // 加工時間 (往復 × 穴数)
+  const cutting_depth = holeType==='blind'?depth:Le;
+  const t1_down = cutting_depth/F*60; // 秒
+  const t1_up = cutting_depth/F*60;   // 逆転引き抜き
+  const t1 = t1_down + t1_up;
+  const tTotal = t1 * holes;
+
+  const ok = torqRatio<=0.80;
+  document.getElementById('tap_rh').className=`result-header ${ok?'ok-res':torqRatio>1.0?'ng-res':'warn-res'}`;
+  document.getElementById('tap_rg').innerHTML=`
+    <div class="res-item res-hl"><div class="res-lbl">🔴 主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🏆 同期送り F (= S × P)</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item"><div class="res-lbl">使用切削速度 Vc</div><div class="res-val">${Vc_act} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">推奨Vc範囲</div><div class="res-val">${vcr.lo}〜${vcr.hi} m/min</div></div>
+    <div class="res-item"><div class="res-lbl">ピッチ P</div><div class="res-val">${P} mm</div></div>
+    <div class="res-item"><div class="res-lbl">コア径 dc</div><div class="res-val">${dc.toFixed(3)} mm</div></div>
+    <div class="res-item"><div class="res-lbl">タッピングトルク Tm</div><div class="res-val">${Tm.toFixed(3)} N·m</div></div>
+    <div class="res-item"><div class="res-lbl">破断限界トルク Tb</div><div class="res-val">${Tb.toFixed(3)} N·m</div></div>
+    <div class="res-item"><div class="res-lbl">トルク安全率</div><div class="res-val" style="color:${torqRatio<0.6?'#86efac':torqRatio<0.8?'#fcd34d':'#fca5a5'}">${(torqRatio*100).toFixed(0)}%</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🔩 推奨下穴径（やや大きめ・タップ保護）</div><div class="res-val">${pilot.rec} mm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">下穴 許容範囲（下限〜上限）</div><div class="res-val">${pilot.lo} 〜 ${pilot.hi} mm</div></div>
+    <div class="res-item"><div class="res-lbl">強度最優先時のみ（下限以下）</div><div class="res-val">${pilot.tight} mm</div></div>
+    <div class="res-item"><div class="res-lbl">1穴加工時間</div><div class="res-val">${fmtT(t1)}</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">総加工時間 (${holes}穴)</div><div class="res-val">${fmtT(tTotal)}</div></div>`;
+
+  const wc=document.getElementById('tap_warns'); wc.innerHTML='';
+  if(torqRatio>1.0) wc.innerHTML+='<div class="info-box ib-red"><h3>🚫 タップ破断危険</h3><p>現在の条件ではタップが折れます。材質変更(コバルト/超硬)・クーラント強化(TSC)・速度低減・または下穴径を大きくしてください。</p></div>';
+  else if(torqRatio>0.80) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 高破断リスク</h3><p>安全率が低すぎます。速度を20%以上落とすか、クーラントをTSCに変更してください。</p></div>';
+  if(S>=nmax) wc.innerHTML+=`<div class="info-box ib-blue"><h3>💡 主軸上限制限</h3><p>推奨速度を達成できません。実際のVc=${Vc_act} m/minで計算しています。</p></div>`;
+  if(isTaper){
+    wc.innerHTML+=`<div class="info-box ib-purple"><h3>🔻 管用テーパねじ (${th.name})</h3><p>テーパ比1/16(片角約1.79°)。全刃が漸進的に全山を切削するためトルクが標準ねじの約1.3倍。<b>極低速・高潤滑(切削油たっぷり)・剛性タップ推奨</b>。ねじ込み量はねじゲージ(管用テーパねじ用)で管理し、基準径位置を出すこと。シール用途のためテフロンシール材併用が一般的。</p></div>`;
+    if(coolKey==='dry') wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ テーパタップ × ドライ</h3><p>テーパタップのドライ加工は焼付き・破断のリスク大。必ず切削油または内部給油を使用してください。</p></div>';
+  }
+  if(cat==='G') wc.innerHTML+=`<div class="info-box ib-blue"><h3>🔧 管用平行ねじ (${th.name})</h3><p>ねじ部が長く一度に多くの刃が係合するためトルク高め。低速・潤滑重視。シールは平行ねじのためガスケット/Oリングで行う(ねじ自体は密封しない)。</p></div>`;
+  if(holeType==='blind') wc.innerHTML+=`<div class="info-box ib-yellow"><h3>⚠ 止まり穴 — 追い抜き注意</h3><p>穴底から最低 ${(2*P).toFixed(2)}mm (= 2P) の逃げ深さを確保してください。スパイラルタップ使用推奨。</p></div>`;
+  if(modeKey==='rigid') wc.innerHTML+='<div class="info-box ib-green"><h3>✅ 剛性タッピング</h3><p>送り速度 F = S × P = <b>'+F+' mm/min</b> を機械に正確に設定してください。NCプログラムでG84サイクル（剛性タップ）を使用。</p></div>';
+  if(typeKey==='form'&&(matKey==='ti'||matKey==='ni')) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 盛上げタップ × 難削材</h3><p>Ti/Inconelへの盛上げタップは切削抵抗が極めて高く推奨しません。切削タップ(スパイラル)に変更してください。</p></div>';
+  if(cat==='Rc'&&typeKey!=='pipe_taper') wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ タップ種別の不一致</h3><p>管用テーパねじには「管用テーパタップ」を選択してください。トルク計算が正しく行われません。</p></div>';
+  else if(cat==='G'&&typeKey!=='pipe_str'&&typeKey!=='pipe_sp') wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ タップ種別の不一致</h3><p>管用平行ねじには「管用平行タップ(ストレート/スパイラル)」を選択してください。</p></div>';
+  else if((typeKey==='pipe_taper'||typeKey==='pipe_str'||typeKey==='pipe_sp')&&!isPipe) wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ タップ種別の不一致</h3><p>管用タップは管用ねじ(G/Rc)専用です。メートル/ユニファイねじには使用しないでください。</p></div>';
+
+  const angK = th.angle===55?1.281:1.2269;
+  document.getElementById('tap_fml').textContent=
+`【タップ加工 学術物理計算ログ】
+ねじ規格: ${th.name} (${THREAD_GROUPS[cat]||cat}, ねじ山角${th.angle||60}°${isTaper?', テーパ1/16':''})
+タップ: ${tl.name} | 種別: ${tt.name} | 被削材: ${tm.name} | クーラント: ${tc.desc}
+
+▼ Step1: 推奨切削速度 Vc (ねじ分類・タップ種別補正込み)
+  Vc_range = ${vcr.lo}〜${vcr.hi} m/min | 採用Vc(中央値) = ${Vc} m/min
+  ${isPipe?`※ 管用ねじ補正: ${cat==='Rc'?'テーパ ×0.55':'平行 ×0.75'} (低速・潤滑重視)`:''}
+  S_theo = Vc×1000/(π×D) = ${Vc}×1000/(π×${D}) = ${S_theo} rpm
+  S_actual = min(${S_theo}, ${nmax}[上限]) = ${S} rpm
+  Vc_actual = S×π×D/1000 = ${Vc_act} m/min
+
+▼ Step2: 同期送り (剛性タップ必須条件)
+  F = S × P = ${S} × ${P} = ${F} mm/min
+  ※ 剛性タッピングでは F = S×P が機械制御で自動同期
+
+▼ Step3: タップコア径 (${th.angle===55?'55°ウィットワース (G/Rc)':'60°メートル/ユニファイ JIS/ISO 724'})
+  dc = D - ${angK}×P = ${D} - ${angK}×${P} = ${dc.toFixed(4)} mm
+
+▼ Step4: タッピングトルク (JIS B 4430 系経験式)
+  Tm = 0.035 × Ct × Km × D^2.2 × P^0.8 × fC${isTaper?' × 1.30(テーパ漸進切削)':''}
+     = 0.035 × ${tt.Ct}(${tt.name}) × ${tm.Km}(${tm.name})
+       × ${D}^2.2 × ${P}^0.8 × ${tc.fC}(${tc.desc})${isTaper?' × 1.30':''}
+     = ${Tm.toFixed(4)} N·m
+
+▼ Step5: タップ破断トルク (材料力学: 中実円形断面のねじり)
+  τ_allow = ${tl.tau} MPa (${tl.name}, 応力集中考慮済み)
+  T_break = τ × π × dc³/16 / 1000
+          = ${tl.tau} × π × ${dc.toFixed(3)}³/16 / 1000
+          = ${Tb.toFixed(4)} N·m
+
+▼ Step6: 安全率評価
+  安全率 = Tm/Tb = ${Tm.toFixed(3)}/${Tb.toFixed(3)} = ${(torqRatio*100).toFixed(1)}%
+  評価: ${torqRatio<0.6?'✅ 安全':torqRatio<0.8?'⚠ 注意':torqRatio<1.0?'❗ 危険':'🚫 破断確実'}
+
+▼ Step7: 下穴径推奨 (許容範囲を大きい径側に設定／YAMAWA・OSGカタログ照合済)
+  ${pilot.note}
+  推奨(やや大きめ): ${pilot.rec} mm
+  許容範囲: ${pilot.lo} mm(下限=${pilot.fixed?'JIS規格標準':'標準D-P'}) 〜 ${pilot.hi} mm(上限=最大径)
+  強度最優先時のみ: ${pilot.tight} mm (下限以下・係合率高)
+  ※ 下穴が大きいほど ねじ係合率↓→タッピングトルク↓→タップ折損リスク↓ (実用強度は係合率60〜80%で十分)
+
+▼ Step8: 加工時間
+  切削深さ = ${cutting_depth} mm | F = ${F} mm/min
+  1穴時間(往復) = ${cutting_depth}/${F}×60×2 = ${t1.toFixed(1)} 秒
+  ${holes}穴合計 = ${tTotal.toFixed(1)} 秒 = ${fmtT(tTotal)}`;
+
+  document.getElementById('tap_result_wrap').classList.remove('hidden');
+}
+
+/* ねじ規格プルダウンを分類別optgroupで自動生成 */
+function populateTapThreads(){
+  const sel=document.getElementById('tap_thread');
+  if(!sel) return;
+  let html='';
+  Object.keys(THREAD_GROUPS).forEach(cat=>{
+    const keys=Object.keys(THREADS).filter(k=>THREADS[k].cat===cat);
+    if(keys.length===0) return;
+    html+=`<optgroup label="${THREAD_GROUPS[cat]}">`;
+    keys.forEach(k=>{
+      html+=`<option value="${k}"${k==='M6_1.0'?' selected':''}>${THREADS[k].name}</option>`;
+    });
+    html+='</optgroup>';
+  });
+  sel.innerHTML=html;
+}
+
+/* ================================================================
+   初期化
+================================================================ */
+window.addEventListener('DOMContentLoaded', ()=>{
+  populateTapThreads();
+  // デフォルト値設定
+  document.getElementById('m_D').value=10;
+  document.getElementById('m_ap').value=2;
+  document.getElementById('m_ae').value=5;
+  document.getElementById('fm_D').value=100;
+  document.getElementById('fm_ae').value=80;
+  document.getElementById('ie_D').value=25;
+  document.getElementById('ie_ap').value=3;
+  document.getElementById('ie_ae').value=15;
+  document.getElementById('hf_D').value=25;
+  document.getElementById('hf_ae').value=20;
+  document.getElementById('d_D').value=10;
+  document.getElementById('d_L').value=30;
+  document.getElementById('t_D').value=50;
+  document.getElementById('t_ap').value=2;
+  refreshM(); refreshFM(); refreshIE(); refreshHF(); refreshD(); refreshT(); refreshTap();
+});
+</script>
+</body>
+</html>
