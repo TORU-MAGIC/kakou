@@ -172,10 +172,15 @@ function fzMaxMilling(ae, D, ap, Z, mat, toolSigma, toolRho, Vc, Pm, eta, OH) {
   return Math.pow(rhs, exponent);
 }
 
-/* Taylor工具寿命 T[min] = C_T / Vc^(1/n_T) */
+/* Taylor工具寿命  ★出典: F.W.Taylor 標準式  Vc·T^n = C  →  T = (C/Vc)^(1/n)
+   本アプリのデータ規約: C_T = C(寿命1minとなる切削速度[m/min]), n_T = 1/n(速度感度指数, 超硬-鋼で約3〜4)
+   よって  T[min] = (C_T / Vc)^n_T
+   ※v4.2.1修正: 旧コードは C_T/Vc^(1/n_T) で指数が小さすぎ寿命曲線が平坦すぎた(非現実的)→標準式に是正。
+     これで「速度2倍→寿命が材料相応に激減」というTaylorの強い速度依存を正しく再現する。 */
 function taylorLife(Vc, mat) {
   const db = MAT[mat];
-  return db.C_T / Math.pow(Vc, 1/db.n_T);
+  if(Vc<=0) return 0;
+  return Math.pow(db.C_T / Vc, db.n_T);
 }
 
 /* 理論面粗さ Rz [μm] */
@@ -238,6 +243,53 @@ function chipThinning(ae, D){
   if(r>=0.5) return 1.0;
   const v = 2*Math.sqrt(r*(1-r));
   return v>0 ? Math.min(1/v, 2.5) : 1.0;
+}
+
+/* ================================================================
+   【ISCAR（イスカル）工具データ】 ★調整可
+   実在グレード＋現行コート超硬の推奨切削速度(目安)。
+   ※値はISCAR一般カタログ/ITA(ISCAR Tool Advisor)の代表レンジに基づく目安。
+     実加工では必ず ISCAR ITA / 最新カタログで最終確認すること。
+   iso: ISO適用分類(P鋼/M ステンレス/K鋳鉄/N非鉄/S 耐熱・チタン/H 硬材)
+   op:  mill=ミーリング / turn=旋削 / both=両用 / drill=穴あけ
+================================================================ */
+const ISCAR_GRADES = {
+  none:   {name:'メーカー指定なし（汎用式）', iso:'-',      op:'any',  line:'-',                 desc:'被削材×工具材質の汎用推奨式で計算（従来どおり）'},
+  // ---- 旋削 ----
+  IC8250: {name:'ISCAR IC8250', iso:'P',      op:'turn', line:'ISO-TURN（CVD）',     desc:'鋼旋削CVDコート。連続・高速切削向き'},
+  IC6025: {name:'ISCAR IC6025', iso:'P/M',    op:'turn', line:'ISO-TURN（CVD）',     desc:'鋼〜ステンレス汎用CVD。靭性と耐摩耗のバランス'},
+  IC907:  {name:'ISCAR IC907',  iso:'M/P/S',  op:'both', line:'ISO-TURN/HELItool（PVD）', desc:'万能PVD(TiAlN)。ステンレス・汎用の定番'},
+  IC806:  {name:'ISCAR IC806',  iso:'S/M',    op:'both', line:'ISO-TURN（PVD）',     desc:'チタン・耐熱合金(HRSA)・ステンレス用'},
+  // ---- ミーリング ----
+  IC830:  {name:'ISCAR IC830',  iso:'P/M/K',  op:'mill', line:'HELIMILL/TANGMILL/HELIDO', desc:'万能ミーリング定番PVD(AlTiN)'},
+  IC900:  {name:'ISCAR IC900',  iso:'M/S',    op:'mill', line:'HELIDO/HELIMILL',    desc:'ステンレス・耐熱合金ミーリング'},
+  IC328:  {name:'ISCAR IC328',  iso:'N',      op:'mill', line:'HELIMILL/SOLIDMILL', desc:'アルミ・非鉄ミーリング'},
+  // ---- 穴あけ ----
+  IC908d: {name:'ISCAR IC908 (SUMOCHAM)', iso:'P/M/S', op:'drill', line:'SUMOCHAM/CHAMDRILL', desc:'交換ヘッドドリル。汎用〜ステンレス'},
+};
+/* ISCAR現行コート超硬の推奨切削速度 Vc[m/min]（荒加工基準の目安・ITA要確認） */
+const ISCAR_VC = {
+  mill: {al:400,al7075:350,steel:200,steel_h:140,steel_hh:60,sus304:120,sus316:100,cast:180,ti:55,ni:35,cu:300,cfrp:150},
+  turn: {al:600,al7075:500,steel:280,steel_h:200,steel_hh:100,sus304:180,sus316:150,cast:250,ti:70,ni:40,cu:400,cfrp:120},
+  drill:{al:120,al7075:110,steel:90, steel_h:65, steel_hh:30,sus304:55, sus316:48, cast:80, ti:25, ni:18, cu:100,cfrp:60},
+};
+/* 加工区分による速度補正（仕上げほど高速・軽負荷） */
+const ISCAR_PROC = {rough:1.00, semi:1.20, finish:1.45};
+/* ISCAR推奨Vc[m/min] を返す（op: mill/turn/drill, proc: rough/semi/finish） */
+function iscarVcRec(matKey, op, proc){
+  const tbl = ISCAR_VC[op] || ISCAR_VC.mill;
+  const base = (tbl[matKey]!=null) ? tbl[matKey] : tbl.steel;
+  return Math.round(base * (ISCAR_PROC[proc]||1.00));
+}
+/* 被削材×加工に推奨されるISCAR製品ライン(ガイダンス文) */
+function iscarLineHint(matKey, op){
+  if(op==='turn') return 'ISO-TURN（PCLNR/DCLNR等）。ステンレス/耐熱はIC907・IC806、鋼はIC8250/IC6025。溝入れはTANG-GRIP。';
+  if(op==='drill') return 'SUMOCHAM（交換ヘッド）/ CHAMDRILL。中心まで超硬で高送り。深穴は内部給油必須。';
+  // mill
+  if(matKey==='sus304'||matKey==='sus316'||matKey==='ti'||matKey==='ni') return 'HELIDO/HELIMILL（IC900/IC806）。難削材は等高送り(トロコイド)＋低ae推奨。';
+  if(matKey==='al'||matKey==='al7075'||matKey==='cu') return 'SOLIDMILL/HELIMILL（IC328）。高Vc・高送り、内部エア/MQL。';
+  if(matKey==='cast') return 'HELIDO/FEEDMILL（K種）。乾式可。';
+  return 'HELIMILL/TANGMILL/HELIDO（IC830）。肩削りはHELI2000、高送りはFEEDMILL/TANG-FIN。';
 }
 
 /* ================================================================
@@ -352,7 +404,7 @@ function drawTaylor(svgId, Vc_curr, mat) {
   const pts=[];
   for(let i=0;i<=20;i++){
     const vc=vcMin+(vcMax-vcMin)*i/20;
-    const T=db.C_T/Math.pow(vc, 1/db.n_T);
+    const T=Math.pow(db.C_T/vc, db.n_T); // ★標準Taylor T=(C/Vc)^n_T (v4.2.1是正)
     pts.push([vc,T]);
   }
   const tMax=Math.max(...pts.map(p=>p[1]));

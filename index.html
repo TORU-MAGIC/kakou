@@ -5,23 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>工具条件計算システム v4.2 — フライス / ドリル / タップ / 旋盤</title>
 <!-- ================================================================
-  ■ ファイル構成（v4.1 整理版・編集ガイド）
-    Claude　加工条件.html … 本ファイル。画面(HTML)＋デザイン(CSS)＋外部JS読込＋初期化
-    ├ core.js     … 共通: 材料/工具DB(MAT,TOOL,GRADE), 物理計算, UI共通部品, 比較表/CSV
+  ■ ファイル構成（v4.2 現場志向版・編集ガイド）
+    index.html … 本ファイル。画面(HTML)＋デザイン(CSS)＋外部JS読込＋初期化
+    ├ core.js     … 共通: 材料/工具DB(MAT,TOOL,GRADE), 物理計算, 油種(COOLANT),
+    │                ap/ae係数, 切りくず薄化, ISCARグレードDB, UI共通, 比較表/CSV
     ├ milling.js  … フライス系(ソリッド/フェイス/インデキサブル/高送り)
     ├ drilling.js … ドリル
     ├ turning.js  … 旋盤
     └ tap.js      … タップ(ねじ規格DB/トルク/下穴/係合率/同期送り)
     ※5つのJSは必ず本HTMLと同じフォルダに置く（ダブルクリック起動で動作）。
+    ※JS更新が反映されない時は下の <script src="...?v=NN"> の数字を上げる(キャッシュ対策)。
 
   ■ 数値を調整したいとき（"★調整可" を各JS冒頭付近に記載）
     ・材料係数/推奨速度        → core.js の MAT
+    ・油種の係数(Vc/送り)       → core.js の COOLANT / coolantAdjust
+    ・ISCAR推奨切削速度         → core.js の ISCAR_VC / ISCAR_GRADES（ITAで要確認）
+    ・ap/ae→Vc・切りくず薄化    → core.js の aeVcFactor/apVcFactor/chipThinning
     ・タップの推奨速度/トルク係数 → tap.js の TAP_MAT / TAP_TYPE / TAP_TOOL
     ・カタログ送り(fz/f)        → milling.js(M_FZ_CAT/FM_FZ_CAT) / drilling.js(D_F_CAT) / turning.js(T_F_CAT)
 
   ■ 出力データの信頼度（精査結果サマリ／詳細は各関数のコメント参照）
-    高信頼: ねじ規格・下穴径(JIS/メーカー一致)・S=Vc·1000/πD・F=S×P・係合率(%)・推奨Vc
-    保守的: タップのトルク値は安全率込みの推定（実トルクは±40%ばらつく）→判定は安全側
+    標準式採用(高信頼): Kienzle切削力, 平均切削厚, 係合角, Taylor寿命(v4.2.1で標準式に是正),
+      切りくず薄化RCTF, S=Vc·1000/πD, F=S×P, 理論粗さ, 下穴径(JIS/メーカー一致), 係合率(%)
+    経験式/目安(△): ドリルトルク・スラスト, ap/ae→Vc係数, タップトルク(安全率込み・±40%),
+      ISCAR推奨Vc(現行コート超硬の代表値・ITAで最終確認)
 ================================================================ -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -230,7 +237,7 @@ svg.taylor{width:100%;height:120px}
       <div class="logo-icon">⚙️</div>
       <div class="logo-text">
         <h1>ACMS Pro — Advanced Cutting Conditions Master System</h1>
-        <p>学術級切削条件計算システム v4.2 現場志向版 | ap/ae・油種連動 | SUS304×超硬 標準 | JIS B 4011 / ISO 3685準拠</p>
+        <p>学術級切削条件計算システム v4.2 現場志向版 | ap/ae・油種・ISCARグレード連動 | SUS304×超硬 標準 | Kienzle / Taylor / ISO 3685準拠</p>
       </div>
     </div>
     <div class="hdr-badges">
@@ -282,15 +289,27 @@ svg.taylor{width:100%;height:120px}
     <div class="tool-desc-panel" id="m_tool_desc"></div>
   </div>
 
-  <!-- クーラント(油種) -->
-  <div class="input-group" style="margin-bottom:14px">
-    <label>💧 クーラント（油種） <span class="tip" data-tip="油種でVc・送り・工具寿命が変わる。水溶性=冷却◎の汎用 / 油性=潤滑◎で難削材・仕上げ向き / 乾式=コート超硬の高速向き(鋼/SUSは注意) / MQL=アルミ・鋳鉄向き">?</span></label>
-    <select id="m_cool" onchange="refreshM()">
-      <option value="wet" selected>水溶性（エマルジョン）</option>
-      <option value="oil">油性（不水溶性切削油）</option>
-      <option value="dry">乾式（エアブロー）</option>
-      <option value="mql">MQL（セミドライ）</option>
-    </select>
+  <!-- クーラント(油種) + ISCARグレード -->
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>💧 クーラント（油種） <span class="tip" data-tip="油種でVc・送り・工具寿命が変わる。水溶性=冷却◎の汎用 / 油性=潤滑◎で難削材・仕上げ向き / 乾式=コート超硬の高速向き(鋼/SUSは注意) / MQL=アルミ・鋳鉄向き">?</span></label>
+      <select id="m_cool" onchange="refreshM()">
+        <option value="wet" selected>水溶性（エマルジョン）</option>
+        <option value="oil">油性（不水溶性切削油）</option>
+        <option value="dry">乾式（エアブロー）</option>
+        <option value="mql">MQL（セミドライ）</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>🔶 ISCARグレード <span class="tip" data-tip="イスカルの現行コート超硬グレード。選ぶとベースVcをISCAR推奨値(目安)に切替。実値はISCAR ITAで最終確認を推奨">?</span></label>
+      <select id="m_iscar" onchange="refreshM()">
+        <option value="none" selected>メーカー指定なし（汎用式）</option>
+        <option value="IC830">ISCAR IC830 (P/M/K 万能ミル)</option>
+        <option value="IC900">ISCAR IC900 (M/S ステンレス・耐熱)</option>
+        <option value="IC328">ISCAR IC328 (N アルミ・非鉄)</option>
+        <option value="IC907">ISCAR IC907 (M/P/S 万能PVD)</option>
+      </select>
+    </div>
   </div>
 
   <!-- 機械スペック -->
@@ -519,14 +538,25 @@ svg.taylor{width:100%;height:120px}
     <div class="tool-desc-panel" id="fm_tool_desc"></div>
   </div>
 
-  <div class="input-group" style="margin-bottom:14px">
-    <label>💧 クーラント（油種）</label>
-    <select id="fm_cool" onchange="refreshFM()">
-      <option value="wet" selected>水溶性（エマルジョン）</option>
-      <option value="oil">油性（不水溶性切削油）</option>
-      <option value="dry">乾式（エアブロー）</option>
-      <option value="mql">MQL（セミドライ）</option>
-    </select>
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>💧 クーラント（油種）</label>
+      <select id="fm_cool" onchange="refreshFM()">
+        <option value="wet" selected>水溶性（エマルジョン）</option>
+        <option value="oil">油性（不水溶性切削油）</option>
+        <option value="dry">乾式（エアブロー）</option>
+        <option value="mql">MQL（セミドライ）</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>🔶 ISCARグレード <span class="tip" data-tip="イスカルのフェイスミル用グレード(HELIDO/HELIMILL系)。選ぶとベースVcをISCAR推奨(目安)に切替。ITA要確認">?</span></label>
+      <select id="fm_iscar" onchange="refreshFM()">
+        <option value="none" selected>メーカー指定なし（汎用式）</option>
+        <option value="IC830">ISCAR IC830 (P/M/K 万能)</option>
+        <option value="IC900">ISCAR IC900 (M/S ステンレス・耐熱)</option>
+        <option value="IC328">ISCAR IC328 (N アルミ・非鉄)</option>
+      </select>
+    </div>
   </div>
 
   <div class="mach-card">
@@ -672,14 +702,25 @@ svg.taylor{width:100%;height:120px}
     <div class="tool-desc-panel" id="ie_tool_desc"></div>
   </div>
 
-  <div class="input-group" style="margin-bottom:14px">
-    <label>💧 クーラント（油種）</label>
-    <select id="ie_cool" onchange="refreshIE()">
-      <option value="wet" selected>水溶性（エマルジョン）</option>
-      <option value="oil">油性（不水溶性切削油）</option>
-      <option value="dry">乾式（エアブロー）</option>
-      <option value="mql">MQL（セミドライ）</option>
-    </select>
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>💧 クーラント（油種）</label>
+      <select id="ie_cool" onchange="refreshIE()">
+        <option value="wet" selected>水溶性（エマルジョン）</option>
+        <option value="oil">油性（不水溶性切削油）</option>
+        <option value="dry">乾式（エアブロー）</option>
+        <option value="mql">MQL（セミドライ）</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>🔶 ISCARグレード <span class="tip" data-tip="イスカルのチップ式エンドミル用グレード。選ぶとベースVcをISCAR推奨(目安)に切替。ITA要確認">?</span></label>
+      <select id="ie_iscar" onchange="refreshIE()">
+        <option value="none" selected>メーカー指定なし（汎用式）</option>
+        <option value="IC830">ISCAR IC830 (P/M/K 万能)</option>
+        <option value="IC900">ISCAR IC900 (M/S ステンレス・耐熱)</option>
+        <option value="IC328">ISCAR IC328 (N アルミ・非鉄)</option>
+      </select>
+    </div>
   </div>
 
   <div class="mach-card">
@@ -810,14 +851,24 @@ svg.taylor{width:100%;height:120px}
     </div>
   </div>
 
-  <div class="input-group" style="margin-bottom:14px">
-    <label>💧 クーラント（油種）</label>
-    <select id="hf_cool" onchange="refreshHF()">
-      <option value="wet" selected>水溶性（エマルジョン）</option>
-      <option value="oil">油性（不水溶性切削油）</option>
-      <option value="dry">乾式（エアブロー）</option>
-      <option value="mql">MQL（セミドライ）</option>
-    </select>
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>💧 クーラント（油種）</label>
+      <select id="hf_cool" onchange="refreshHF()">
+        <option value="wet" selected>水溶性（エマルジョン）</option>
+        <option value="oil">油性（不水溶性切削油）</option>
+        <option value="dry">乾式（エアブロー）</option>
+        <option value="mql">MQL（セミドライ）</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>🔶 ISCARグレード <span class="tip" data-tip="イスカルの高送りミル用グレード(FEEDMILL/TANG-FIN系)。選ぶとベースVcをISCAR推奨(目安)に切替。ITA要確認">?</span></label>
+      <select id="hf_iscar" onchange="refreshHF()">
+        <option value="none" selected>メーカー指定なし（汎用式）</option>
+        <option value="IC830">ISCAR IC830 (P/M/K 万能)</option>
+        <option value="IC900">ISCAR IC900 (M/S ステンレス・耐熱)</option>
+      </select>
+    </div>
   </div>
 
   <div class="mach-card">
@@ -972,6 +1023,14 @@ svg.taylor{width:100%;height:120px}
       </div>
     </div>
     <div class="tool-desc-panel" id="d_tool_desc"></div>
+  </div>
+
+  <div class="input-group" style="margin-bottom:14px">
+    <label>🔶 ISCARドリル グレード <span class="tip" data-tip="イスカルの交換ヘッドドリル(SUMOCHAM/CHAMDRILL)グレード。選ぶとベースVcをISCAR推奨(目安)に切替。給油条件は上のTSCで指定。ITA要確認">?</span></label>
+    <select id="d_iscar" onchange="refreshD()">
+      <option value="none" selected>メーカー指定なし（汎用式）</option>
+      <option value="IC908d">ISCAR IC908 (SUMOCHAM / P・M・S)</option>
+    </select>
   </div>
 
   <div class="mach-card">
@@ -1151,14 +1210,26 @@ svg.taylor{width:100%;height:120px}
     <div class="tool-desc-panel" id="t_tool_desc"></div>
   </div>
 
-  <div class="input-group" style="margin-bottom:14px">
-    <label>💧 クーラント（油種）</label>
-    <select id="t_cool" onchange="refreshT()">
-      <option value="wet" selected>水溶性（エマルジョン）</option>
-      <option value="oil">油性（不水溶性切削油）</option>
-      <option value="dry">乾式（エアブロー）</option>
-      <option value="mql">MQL（セミドライ）</option>
-    </select>
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>💧 クーラント（油種）</label>
+      <select id="t_cool" onchange="refreshT()">
+        <option value="wet" selected>水溶性（エマルジョン）</option>
+        <option value="oil">油性（不水溶性切削油）</option>
+        <option value="dry">乾式（エアブロー）</option>
+        <option value="mql">MQL（セミドライ）</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>🔶 ISCARグレード <span class="tip" data-tip="イスカルの現行コート超硬グレード。選ぶとベースVcをISCAR推奨値(目安)に切替。実値はISCAR ITAで最終確認を推奨">?</span></label>
+      <select id="t_iscar" onchange="refreshT()">
+        <option value="none" selected>メーカー指定なし（汎用式）</option>
+        <option value="IC8250">ISCAR IC8250 (P 鋼旋削CVD)</option>
+        <option value="IC6025">ISCAR IC6025 (P/M 汎用CVD)</option>
+        <option value="IC907">ISCAR IC907 (M/P/S 万能PVD)</option>
+        <option value="IC806">ISCAR IC806 (S/M チタン・耐熱)</option>
+      </select>
+    </div>
   </div>
 
   <div class="mach-card">
@@ -1486,11 +1557,11 @@ svg.taylor{width:100%;height:120px}
      ※外部JSはHTMLと同じフォルダに置くこと（ダブルクリック起動可）。
      ※?v=… はキャッシュ対策。JSを更新したらこの数字を上げると確実に反映される。
      ============================================================ -->
-<script src="core.js?v=422"></script>
-<script src="milling.js?v=422"></script>
-<script src="drilling.js?v=422"></script>
-<script src="turning.js?v=422"></script>
-<script src="tap.js?v=422"></script>
+<script src="core.js?v=425"></script>
+<script src="milling.js?v=425"></script>
+<script src="drilling.js?v=425"></script>
+<script src="turning.js?v=425"></script>
+<script src="tap.js?v=425"></script>
 <script>
 'use strict';
 /* ================================================================

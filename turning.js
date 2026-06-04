@@ -50,13 +50,18 @@ function refreshT() {
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel;
   // 【v4.2】油種・切込みap を Vc/送りに反映（重切削=低速、油種で速度・送り・寿命が変わる）
   const cool=s('t_cool')||'wet';
+  const iscar=s('t_iscar')||'none';
   const coolA=coolantAdjust(cool,mat,tool);
+  const ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
   const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
 
   document.getElementById('t_tool_desc').innerHTML=
-    `<b>${tl.name}</b>: ${tl.desc}<br>κr=${kr}° | Rε=${re}mm | モード:${mode} | 💧${coolA.name}${getToolChips(tool)}`;
+    `<b>${tl.name}</b>: ${tl.desc}<br>κr=${kr}° | Rε=${re}mm | モード:${mode} | 💧${coolA.name}${getToolChips(tool)}`
+    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨: ${iscarLineHint(mat,'turn')}（ITA要確認）</span>`:'');
 
-  const Vc_b=db.vcT[proc]*tl.vcF*coolA.vcF*apTF;
+  // ISCARグレード選択時はベースVcをISCAR推奨(現行コート超硬)に切替
+  const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
+  const Vc_b=Vc_base0*coolA.vcF*apTF;
   document.getElementById('t_Vc').value=Math.round(Vc_b);
 
   if(!D||D<=0||!ap||ap<=0){document.getElementById('t_f').value='';setBtn('t_btn',false);return;}
@@ -110,7 +115,8 @@ function refreshT() {
 
   document.getElementById('t_rec_body').innerHTML=`
 <p style="font-size:11px;line-height:1.9;color:var(--txt2)">
-<b>${tl.name}</b> | κr=${kr}° | Rε=${re}mm | ${mode}<br>
+<b>${iscar!=='none'?ig.name:tl.name}</b> | κr=${kr}° | Rε=${re}mm | ${mode} | 💧${coolA.name}<br>
+<b>Vc=</b>${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR推奨)`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油種)×${apTF.toFixed(2)}(ap)=<b style="color:#ffd700">${Vc} m/min</b><br>
 <b>f_phys:</b> ${p4(res.f)} | <b>f_cat:</b> ${p4(f_cat)}<br>
 <b>確定f:</b> <b style="color:#ffd700">${p4(f_real)} mm/rev</b><br>
 <b>Fc:</b> ${Fc.toFixed(0)} N | <b>Torq:</b> ${Torq.toFixed(1)} N·m (${(torqRatio*100).toFixed(0)}%)<br>
@@ -126,8 +132,10 @@ function calcT() {
   const Pm=n('t_motor'), eta=n('t_eta'), torqMax=n('t_torque_max')||200;
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel;
   const cool=s('t_cool')||'wet', coolA=coolantAdjust(cool,mat,tool);
+  const iscar=s('t_iscar')||'none';
   const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
-  const Vc=Math.round(db.vcT[proc]*tl.vcF*coolA.vcF*apTF);
+  const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
+  const Vc=Math.round(Vc_base0*coolA.vcF*apTF);
   const res=fMaxTurning(ap,mat,tool,Vc,Pm,eta,kr);
   const f_cat=(T_F_CAT[mat]||T_F_CAT.steel)[proc]*coolA.fzF;
   const f=Math.min(res.f,f_cat);
@@ -175,7 +183,7 @@ function calcT() {
 工具: ${tl.name} | κr=${kr}° | Rε=${re}mm | モード:${mode}
 材料: ${db.name} | Ks1=${db.Ks1} N/mm² | mc=${db.mc}
 
-▼ Step1: Vc = ${db.vcT[proc]}×${tl.vcF} = ${Vc} m/min
+▼ Step1: Vc = ${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR ${(ISCAR_GRADES[iscar]||{}).name||iscar})`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油種)×${apTF.toFixed(2)}(ap) = ${Vc} m/min${iscar!=='none'?'  ※ISCAR推奨は目安・ITA要確認':''}
 
 ▼ Step2: κr補正係数 Kc = 1+0.15×cos(${kr}°) = ${Kc.toFixed(4)}
 

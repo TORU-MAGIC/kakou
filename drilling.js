@@ -57,11 +57,15 @@ function refreshD() {
   const tl=TOOL[tool];
   const db=MAT[mat]||MAT.steel;
   const tf=tscFactor(tsc);
+  const iscar=s('d_iscar')||'none';
+  const ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
 
   document.getElementById('d_tool_desc').innerHTML=
-    `<b>${tl.name}</b>: ${tl.desc}<br>ドリル種別: ${dType} | TSC: ${tsc} (${tf.desc})`;
+    `<b>${tl.name}</b>: ${tl.desc}<br>ドリル種別: ${dType} | TSC: ${tsc} (${tf.desc})`
+    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> 推奨${iscarVcRec(mat,'drill','rough')} m/min基準（SUMOCHAM/CHAMDRILL, ITA要確認）`:'');
 
-  const Vc_b=db.vcD[proc]*tl.vcF*tf.vcF;
+  // ISCAR選択時はベースVcをISCARドリル推奨に切替（TSC補正はそのまま掛かる）
+  const Vc_b=(iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF;
   document.getElementById('d_Vc').value=Math.round(Vc_b);
 
   // TSC情報表示
@@ -153,7 +157,8 @@ function calcD() {
   const dType=s('d_type');
   const pilotOn=s('d_pilot')==='1', d_pilot=pilotOn?n('d_pilot_d'):0;
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel, tf=tscFactor(tsc);
-  const Vc=Math.round(db.vcD[proc]*tl.vcF*tf.vcF);
+  const iscar=s('d_iscar')||'none';
+  const Vc=Math.round((iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF);
   const S=Math.round(Vc*1000/(Math.PI*D));
   const ld=L/D;
   const ldF_v=ldFactor(ld,tsc);
