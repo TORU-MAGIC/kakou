@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>工具条件計算システム v4.2 — フライス / ドリル / タップ / 旋盤</title>
+<title>工具条件計算システム v4.2 — フライス / ドリル / タップ / 旋盤 / MC1本バイト</title>
 <!-- ================================================================
   ■ ファイル構成（v4.2 現場志向版・編集ガイド）
     index.html … 本ファイル。画面(HTML)＋デザイン(CSS)＋外部JS読込＋初期化
-    ├ core.js     … 共通: 材料/工具DB(MAT,TOOL,GRADE), 物理計算, 油種(COOLANT),
-    │                ap/ae係数, 切りくず薄化, ISCARグレードDB, UI共通, 比較表/CSV
+    ├ core.js     … 共通: 材料/工具DB(MAT,TOOL,GRADE), インサート形状DB(INSERT_SHAPE),
+    │                物理計算, 油種(COOLANT), ap/ae係数, 切りくず薄化, ISCARグレードDB, UI共通, 比較表/CSV
     ├ milling.js  … フライス系(ソリッド/フェイス/インデキサブル/高送り)
     ├ drilling.js … ドリル
-    ├ turning.js  … 旋盤
-    └ tap.js      … タップ(ねじ規格DB/トルク/下穴/係合率/同期送り)
-    ※5つのJSは必ず本HTMLと同じフォルダに置く（ダブルクリック起動で動作）。
+    ├ turning.js  … 旋盤(インサート形状=当たり面・刃先強度→送り補正＋f↔F換算)
+    ├ tap.js      … タップ(ねじ規格DB/トルク/下穴/係合率/同期送り)
+    └ boring.js   … MC1本バイト/ボーリング(中ぐり)。インサート形状＋バー突き出しL/D剛性・たわみ・f↔F換算
+    ※6つのJSは必ず本HTMLと同じフォルダに置く（ダブルクリック起動で動作）。
     ※JS更新が反映されない時は下の <script src="...?v=NN"> の数字を上げる(キャッシュ対策)。
 
   ■ 数値を調整したいとき（"★調整可" を各JS冒頭付近に記載）
@@ -263,6 +264,7 @@ svg.taylor{width:100%;height:120px}
     <button class="tab-btn" onclick="switchMain('drilling',this)">🔩 ドリル加工</button>
     <button class="tab-btn" onclick="switchMain('tap',this)" style="background:linear-gradient(135deg,rgba(220,38,38,.25),rgba(239,68,68,.15));border-color:#ef4444;color:#fca5a5;font-weight:800">🔴 タップ加工 ★</button>
     <button class="tab-btn" onclick="switchMain('turning',this)">🔄 旋盤加工</button>
+    <button class="tab-btn" onclick="switchMain('boring',this)" style="background:linear-gradient(135deg,rgba(13,148,136,.25),rgba(8,145,178,.15));border-color:#0891b2;color:#67e8f9;font-weight:800">🛠️ MC1本バイト ★</button>
     <button class="tab-btn" onclick="switchMain('compare',this)">📊 条件比較</button>
   </div>
 </div>
@@ -1162,6 +1164,18 @@ svg.taylor{width:100%;height:120px}
 
   <div class="tool-card">
     <h4>🔨 工具材質・チップ設定</h4>
+    <div class="input-group">
+      <label>🔷 インサート形状（当たり面＝刃先強度・送り係数） <span class="tip" data-tip="ISOインサート形状記号。ノーズ(コーナー)内角=当たり面の刃先強度。丸R/四角S90°/トライゴンW80°/ひし形C80°は刃先が強く高送り・大ap可。三角T60°・ひし形D55°/V35°は内角が小さく倣い向きで送りは控えめ。送り係数を基準C(80°)に対して乗算します。">?</span></label>
+      <select id="t_shape" onchange="refreshT()">
+        <option value="R">丸 R (RNMG/RCMT) — 刃先最強・重切削/R</option>
+        <option value="S">四角 90° S (SNMG) — 荒/端面/強断続</option>
+        <option value="W">三角フラット(トライゴン)80° W (WNMG) — 両面6コーナー</option>
+        <option value="C" selected>ひし形 80° C (CNMG) — 汎用基準</option>
+        <option value="T">三角 60° T (TNMG) — 汎用/経済的</option>
+        <option value="D">ひし形 55° D (DNMG) — 倣い</option>
+        <option value="V">ひし形 35° V (VNMG) — 倣い/仕上げ</option>
+      </select>
+    </div>
     <div class="option-grid">
       <div class="input-group">
         <label>工具材質</label>
@@ -1311,6 +1325,12 @@ svg.taylor{width:100%;height:120px}
     </div>
   </div>
 
+  <!-- 送り換算 (f → F) ＋ インサート形状・当たり面 -->
+  <div class="highlight-box">
+    <h4>🔁 送り換算 (f ⇄ F) ＋ インサート形状・当たり面</h4>
+    <div id="t_feed_panel" style="font-size:11px;color:var(--txt2);line-height:1.9">ワーク径と切込みを入力すると表示されます</div>
+  </div>
+
   <div id="t_phys_panel" class="phys-panel ok">
     <h4>📐 リアルタイム物理解析</h4>
     <div class="phys-grid" id="t_phys_grid"></div>
@@ -1345,6 +1365,257 @@ svg.taylor{width:100%;height:120px}
 </div>
 </div>
 </div><!-- /turning tab -->
+
+<!-- ================================================================ -->
+<!-- ===== TAB: MC 1本バイト / ボーリング（中ぐり） ===== -->
+<!-- ================================================================ -->
+<div id="tab_boring" class="tab-content">
+<div class="two-col">
+<div class="card">
+  <h2 class="card-title"><span>🛠️</span> MC 1本バイト（ボーリング/中ぐり）入力</h2>
+
+  <div class="info-box ib-blue" style="margin-bottom:12px">
+    <h3>🛠️ MC（マシニングセンタ）で使う1本刃バイトの条件</h3>
+    <p>主軸にボーリングバー/中ぐりバーを装着し、回転する工具で内径(中ぐり)・端面/座ぐり・面取りを行う想定。インサート形状(三角フラット/ひし形/丸 等)の「当たり面＝刃先強度」を送りに反映し、送り f[mm/rev] とF送り[mm/min]（=f×S）を自動算出。バー突き出し L/D の剛性・たわみ・びびりも評価します。</p>
+  </div>
+
+  <div class="tool-card">
+    <h4>🔨 工具材質・インサート形状</h4>
+    <div class="input-group">
+      <label>🔷 インサート形状（当たり面＝刃先強度・送り係数） <span class="tip" data-tip="ISOインサート形状記号。ノーズ(コーナー)内角=当たり面の刃先強度。丸R/四角S90°/トライゴンW80°/ひし形C80°は刃先が強く高送り・大ap可。三角T60°・ひし形D55°/V35°は内角が小さく倣い向きで送りは控えめ。送り係数を基準C(80°)に対して乗算します。">?</span></label>
+      <select id="b_shape" onchange="refreshBoring()">
+        <option value="R">丸 R (RNMG/RCMT) — 刃先最強・重切削/R</option>
+        <option value="S">四角 90° S (SNMG) — 荒/端面/強断続</option>
+        <option value="W">三角フラット(トライゴン)80° W (WNMG) — 両面6コーナー</option>
+        <option value="C" selected>ひし形 80° C (CNMG) — 汎用基準</option>
+        <option value="T">三角 60° T (TNMG) — 汎用/経済的</option>
+        <option value="D">ひし形 55° D (DNMG) — 倣い</option>
+        <option value="V">ひし形 35° V (VNMG) — 倣い/仕上げ</option>
+      </select>
+    </div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>工具材質（チップ材質）</label>
+        <select id="b_tool" onchange="refreshBoring()">
+          <option value="hss">高速度鋼 HSS</option>
+          <option value="carbide" selected>超硬合金</option>
+          <option value="coated">AlTiN/TiAlNコーティング超硬</option>
+          <option value="cermet">サーメット</option>
+          <option value="cbn">CBN（焼入鋼専用）</option>
+          <option value="pcd">PCD（アルミ専用）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>加工モード</label>
+        <select id="b_mode" onchange="refreshBoring()">
+          <option value="bore_through" selected>中ぐり（貫通）</option>
+          <option value="bore_blind">中ぐり（止まり穴）</option>
+          <option value="face">端面 / 座ぐり</option>
+          <option value="chamfer">面取り</option>
+        </select>
+      </div>
+    </div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>アプローチ角 κr <span class="unit-tag">[°]</span></label>
+        <select id="b_kr" onchange="refreshBoring()">
+          <option value="91">91° (内径標準)</option>
+          <option value="75" selected>75°</option>
+          <option value="60">60°</option>
+          <option value="45">45° (低切削力)</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>ノーズR rε <span class="unit-tag">[mm]</span></label>
+        <select id="b_re" onchange="refreshBoring()">
+          <option value="0.2">0.2 (精密仕上げ)</option>
+          <option value="0.4" selected>0.4 (仕上げ)</option>
+          <option value="0.8">0.8 (標準)</option>
+          <option value="1.2">1.2 (中荒)</option>
+          <option value="2.4">2.4 (荒加工)</option>
+        </select>
+      </div>
+    </div>
+    <div class="option-grid">
+      <div class="input-group">
+        <label>💧 クーラント（油種）</label>
+        <select id="b_cool" onchange="refreshBoring()">
+          <option value="wet" selected>水溶性（エマルジョン）</option>
+          <option value="oil">油性（不水溶性切削油）</option>
+          <option value="dry">乾式（エアブロー）</option>
+          <option value="mql">MQL（セミドライ）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>🔶 ISCARグレード <span class="tip" data-tip="イスカルの内径バー/ISO-TURNグレード。選ぶとベースVcをISCAR推奨(目安)に切替。ITA要確認">?</span></label>
+        <select id="b_iscar" onchange="refreshBoring()">
+          <option value="none" selected>メーカー指定なし（汎用式）</option>
+          <option value="IC8250">ISCAR IC8250 (P 鋼旋削CVD)</option>
+          <option value="IC6025">ISCAR IC6025 (P/M 汎用CVD)</option>
+          <option value="IC907">ISCAR IC907 (M/P/S 万能PVD)</option>
+          <option value="IC806">ISCAR IC806 (S/M チタン・耐熱)</option>
+        </select>
+      </div>
+    </div>
+    <div class="tool-desc-panel" id="b_tool_desc"></div>
+  </div>
+
+  <!-- ボーリングバー -->
+  <div class="mach-card" style="background:linear-gradient(135deg,rgba(13,148,136,.12),rgba(8,145,178,.08));border-color:rgba(13,148,136,.35)">
+    <h4 style="color:#5eead4">🛠️ ボーリングバー（突き出し剛性 L/D）</h4>
+    <div class="three-col">
+      <div class="input-group">
+        <label>バー材質</label>
+        <select id="b_bar" onchange="refreshBoring()">
+          <option value="steel" selected>鋼シャンク（L/D≤4）</option>
+          <option value="hm_steel">超硬ヘッド+鋼（L/D≤6）</option>
+          <option value="carbide">超硬シャンク（L/D≤8）</option>
+          <option value="damped">防振バー・制振（L/D≤10）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>バー径 d <span class="unit-tag">[mm]</span></label>
+        <input type="number" id="b_dbar" value="16" step="1" oninput="refreshBoring()">
+      </div>
+      <div class="input-group">
+        <label>突き出し OH <span class="unit-tag">[mm]</span> <span class="tip" data-tip="バー先端〜ホルダ把握端の距離。L/D=OH/dが剛性・びびりの最重要指標。鋼≤4・超硬≤6〜8・防振≤7〜10が目安。超えると自動でVc低減＋警告。">?</span></label>
+        <input type="number" id="b_OH" value="48" step="1" oninput="refreshBoring()">
+      </div>
+    </div>
+  </div>
+
+  <div class="mach-card">
+    <h4>🏭 機械スペック</h4>
+    <div class="four-col">
+      <div class="input-group">
+        <label>主軸出力 Pm <span class="unit-tag">[kW]</span></label>
+        <input type="number" id="b_motor" value="7.5" step="0.5" oninput="refreshBoring()">
+      </div>
+      <div class="input-group">
+        <label>伝達効率 η</label>
+        <input type="number" id="b_eta" value="0.80" step="0.01" oninput="refreshBoring()">
+      </div>
+      <div class="input-group">
+        <label>主軸最高回転 <span class="unit-tag">[rpm]</span></label>
+        <input type="number" id="b_nmax" value="8000" step="500" oninput="refreshBoring()">
+      </div>
+      <div class="input-group">
+        <label>最大トルク <span class="unit-tag">[N·m]</span></label>
+        <input type="number" id="b_torque_max" value="80" step="5" oninput="refreshBoring()">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">加工条件</div>
+  <div class="four-col">
+    <div class="input-group">
+      <label>被削材</label>
+      <select id="b_mat" onchange="refreshBoring()">
+        <option value="al">アルミ合金</option>
+        <option value="al7075">A7075 超ジュラルミン</option>
+        <option value="steel" selected>S45C / SS400</option>
+        <option value="steel_h">SCM440 (HRC30)</option>
+        <option value="steel_hh">SKD11 (HRC55)</option>
+        <option value="sus304">SUS304</option>
+        <option value="sus316">SUS316L</option>
+        <option value="cast">鋳鉄 FC250</option>
+        <option value="ti">Ti-6Al-4V</option>
+        <option value="ni">Inconel 718</option>
+        <option value="cu">銅合金 C3604</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>加工区分</label>
+      <select id="b_proc" onchange="refreshBoring()">
+        <option value="rough">荒加工</option>
+        <option value="semi">中仕上げ</option>
+        <option value="finish" selected>仕上げ</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>加工穴径 D <span class="unit-tag">[mm]</span> <span class="tip" data-tip="中ぐり仕上げ径。S=1000Vc/πDの基準。径が小さいほど回転数が上がり主軸上限に当たりやすい">?</span></label>
+      <input type="number" id="b_D" step="0.1" placeholder="40" oninput="refreshBoring()">
+    </div>
+    <div class="input-group">
+      <label>加工長さ L <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="b_L" value="40" step="1">
+    </div>
+    <div class="input-group">
+      <label>切込み ap <span class="unit-tag">[mm]</span></label>
+      <input type="number" id="b_ap" value="0.5" step="0.1" oninput="refreshBoring()">
+    </div>
+    <div class="input-group">
+      <label>パス数</label>
+      <input type="number" id="b_pass" value="1" step="1">
+    </div>
+    <div class="input-group">
+      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <input id="b_Vc" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>物理上限 f_max ★自動 <span class="unit-tag">[mm/rev]</span></label>
+      <input id="b_fmax" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>確定 f ★自動 <span class="unit-tag">[mm/rev]</span></label>
+      <input id="b_f" readonly>
+    </div>
+    <div class="input-group">
+      <label>主軸回転 S ★自動 <span class="unit-tag">[rpm]</span></label>
+      <input id="b_S" class="f-auto" readonly>
+    </div>
+    <div class="input-group">
+      <label>送り速度 F ★自動 <span class="unit-tag">[mm/min]</span></label>
+      <input id="b_F" class="f-auto" readonly>
+    </div>
+  </div>
+
+  <!-- 送り換算パネル -->
+  <div class="highlight-box">
+    <h4>🔁 送り換算 (f ⇄ F) ＋ インサート形状・当たり面</h4>
+    <div id="b_feed_panel" style="font-size:11px;color:var(--txt2);line-height:1.9">加工穴径・切込み・バー径を入力すると表示されます</div>
+  </div>
+
+  <!-- バー剛性パネル -->
+  <div class="highlight-box" style="background:linear-gradient(135deg,rgba(13,148,136,.15),rgba(8,145,178,.1));border-color:rgba(13,148,136,.3)">
+    <h4>🛠️ ボーリングバー剛性・L/D・先端たわみ</h4>
+    <div id="b_bar_info" style="font-size:11px;color:var(--txt2);line-height:1.9">ボーリングバー径と突き出しを入力すると表示されます</div>
+  </div>
+
+  <div id="b_phys_panel" class="phys-panel ok">
+    <h4>📐 リアルタイム物理解析</h4>
+    <div class="phys-grid" id="b_phys_grid"></div>
+    <div class="dual-bar">
+      <div class="bar-group">
+        <label>機械負荷率</label>
+        <div class="bar-wrap"><div class="bar-fill" id="b_bar_load" style="width:0%"><span id="b_pct_load">0%</span></div></div>
+      </div>
+      <div class="bar-group">
+        <label>工具応力比（バー曲げ基準）</label>
+        <div class="bar-wrap"><div class="bar-fill" id="b_bar_stress" style="width:0%"><span id="b_pct_stress">0%</span></div></div>
+      </div>
+    </div>
+    <div class="verdict ok" id="b_verdict">加工穴径を入力してください</div>
+  </div>
+  <button class="calc-btn disabled-btn" id="b_btn" onclick="calcBoring()">🛠️ MC1本バイト条件を計算する</button>
+</div>
+
+<div class="card">
+  <h2 class="card-title"><span>💡</span> MC 1本バイト 結果・解析</h2>
+  <div id="b_rec" class="phys-panel ok" style="margin-bottom:12px">
+    <h4>📊 MC 1本バイト（ボーリング）物理根拠</h4>
+    <div id="b_rec_body"><p style="font-size:11px;color:var(--txt3)">条件入力で表示</p></div>
+  </div>
+  <div id="b_result_wrap" class="hidden">
+    <div class="result-header ok-res" id="b_rh">
+      <div class="res-grid" id="b_rg"></div>
+    </div>
+    <div id="b_warns"></div>
+    <div class="fml-box"><h4>📐 全計算式詳細ログ</h4><code id="b_fml"></code></div>
+  </div>
+</div>
+</div>
+</div><!-- /boring tab -->
 
 <!-- ================================================================ -->
 <!-- ===== TAB: タップ加工 ===== -->
@@ -1557,11 +1828,12 @@ svg.taylor{width:100%;height:120px}
      ※外部JSはHTMLと同じフォルダに置くこと（ダブルクリック起動可）。
      ※?v=… はキャッシュ対策。JSを更新したらこの数字を上げると確実に反映される。
      ============================================================ -->
-<script src="core.js?v=425"></script>
-<script src="milling.js?v=425"></script>
-<script src="drilling.js?v=425"></script>
-<script src="turning.js?v=425"></script>
-<script src="tap.js?v=425"></script>
+<script src="core.js?v=426"></script>
+<script src="milling.js?v=426"></script>
+<script src="drilling.js?v=426"></script>
+<script src="turning.js?v=426"></script>
+<script src="tap.js?v=426"></script>
+<script src="boring.js?v=426"></script>
 <script>
 'use strict';
 /* ================================================================
@@ -1584,15 +1856,22 @@ window.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('d_L').value=30;
   document.getElementById('t_D').value=50;
   document.getElementById('t_ap').value=2;
+  document.getElementById('b_D').value=40;
+  document.getElementById('b_ap').value=0.5;
+  document.getElementById('b_dbar').value=16;
+  document.getElementById('b_OH').value=48;
+  document.getElementById('b_L').value=40;
 
   // ★初期選択: 全タブ「被削材=SUS304 / 工具材質=超硬(チップ式はM20グレード)」
   const setVal=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v;};
-  ['m_mat','fm_mat','ie_mat','hf_mat','d_mat','t_mat','tap_mat'].forEach(id=>setVal(id,'sus304'));
-  ['m_tool','d_tool','t_tool','tap_tool'].forEach(id=>setVal(id,'carbide'));
+  ['m_mat','fm_mat','ie_mat','hf_mat','d_mat','t_mat','tap_mat','b_mat'].forEach(id=>setVal(id,'sus304'));
+  ['m_tool','d_tool','t_tool','tap_tool','b_tool'].forEach(id=>setVal(id,'carbide'));
   ['fm_grade','ie_grade','hf_grade'].forEach(id=>setVal(id,'M20'));
+  // インサート形状の初期=C(80°ひし形・基準)。旋盤/MC1本バイト既定でC。
+  ['t_shape','b_shape'].forEach(id=>setVal(id,'C'));
   // クーラント初期=水溶性(現場で最も一般的)。各タブ既定でwet。
 
-  refreshM(); refreshFM(); refreshIE(); refreshHF(); refreshD(); refreshT(); refreshTap();
+  refreshM(); refreshFM(); refreshIE(); refreshHF(); refreshD(); refreshT(); refreshTap(); refreshBoring();
 });
 </script>
 </body>
