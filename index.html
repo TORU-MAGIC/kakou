@@ -26,9 +26,9 @@
     ・カタログ送り(fz/f)        → milling.js(M_FZ_CAT/FM_FZ_CAT) / drilling.js(D_F_CAT) / turning.js(T_F_CAT)
 
   ■ 出力データの信頼度（精査結果サマリ／詳細は各関数のコメント参照）
-    標準式採用(高信頼): Kienzle切削力, 平均切削厚, 係合角, Taylor寿命(v4.2.1で標準式に是正),
-      切りくず薄化RCTF, S=Vc·1000/πD, F=S×P, 理論粗さ, 下穴径(JIS/メーカー一致), 係合率(%)
-    経験式/目安(△): ドリルトルク・スラスト, ap/ae→Vc係数, タップトルク(安全率込み・±40%),
+    標準式採用(高信頼): Kienzle切削力(進入角補正込み), 平均切削厚, 係合角, Taylor寿命(v4.2.1で標準式に是正),
+      切りくず薄化RCTF, S=Vc·1000/πD, F=S×P, 理論粗さ, 60°ねじ係合率(%)
+    経験式/目安(△): ドリルトルク・スラスト, ap/ae→Vc係数, タップトルク(安全率込み・±40%), 下穴径の低トルク案,
       ISCAR推奨Vc(現行コート超硬の代表値・ITAで最終確認)
 ================================================================ -->
 <style>
@@ -238,13 +238,13 @@ svg.taylor{width:100%;height:120px}
       <div class="logo-icon">⚙️</div>
       <div class="logo-text">
         <h1>ACMS Pro — Advanced Cutting Conditions Master System</h1>
-        <p>学術級切削条件計算システム v4.2 現場志向版 | ap/ae・油種・ISCARグレード連動 | SUS304×超硬 標準 | Kienzle / Taylor / ISO 3685準拠</p>
+        <p>切削条件計算支援システム v4.2 現場志向版 | ap/ae・油種・ISCARグレード連動 | SUS304×超硬 標準 | Kienzle / Taylor / メーカー値要確認</p>
       </div>
     </div>
     <div class="hdr-badges">
-      <span class="badge sci">🔬 学術級物理演算</span>
-      <span class="badge iso">📐 ISO 3685準拠</span>
-      <span class="badge jis">🇯🇵 JIS B 4011準拠</span>
+      <span class="badge sci">🔬 工学式ベース</span>
+      <span class="badge iso">📐 標準式＋経験式</span>
+      <span class="badge jis">🇯🇵 規格・メーカー値要確認</span>
       <span class="badge sci">⚡ 高送り対応</span>
       <span class="badge iso">🏭 工具長補正</span>
       <span class="badge jis">🔴 タップ加工</span>

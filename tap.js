@@ -203,7 +203,7 @@ function threadEngagement(D, d_hole, P){
   return 76.98 * (D - d_hole) / P;
 }
 
-/* タッピングトルク [N·m]  (JIS B 4430 系経験式)
+/* タッピングトルク [N·m]  (経験式・安全側の目安)
    Tm = 0.035 × Ct × Km × D^2.2 × P^0.8 × fC × taperF
    taperF: 管用テーパねじは全刃が漸進的に全山切削するため割増 */
 function tapTorque(D, P, typeKey, matKey, coolKey, isTaper){
@@ -229,28 +229,29 @@ function tapVcRec(matKey, toolKey, typeKey, cat){
   return {lo:Math.max(1,Math.round(lo)), hi:Math.max(2,Math.round(hi)), rec:Math.max(1,Math.round((lo+hi)/2))};
 }
 
-/* 下穴径推奨 [mm] — 許容範囲を「大きい径側」に設定
+/* 下穴径推奨 [mm]
    方針: 下穴が大きい → ねじ係合率↓ → タッピングトルク↓ → タップ折損リスク大幅減。
          実用上ねじ係合率60〜80%で強度は十分なため、安全側=大きい径を優先する。
+         ただし管用ねじ(G/Rc)はゲージ管理・シール性が絡むため、登録済みの基準下穴径を固定表示する。
    返り値: lo=許容下限(=標準/最小径) rec=推奨(やや大きめ) hi=許容上限(最大径・最も安全)
            tight=強度最優先時のみ可(下限以下) fixed=管用規格指定ドリルか
-   照合: YAMAWA/OSG タップ用ドリル径カタログ準拠 */
+   ※量産・シール用途・特殊タップでは必ず使用タップメーカー表とねじゲージで最終確認する。 */
 function tapPilotDia(D, P, typeKey, th){
-  // --- 管用ねじ(G/Rc): JIS/メーカー指定ストレートドリル径が基準 ---
+  // --- 管用ねじ(G/Rc): 登録済みの基準ストレートドリル径を固定表示 ---
   if(th && th.drill){
     const d = th.drill;
     return {
-      lo:  p2(d),                 // JIS B 0202/0203 規格標準ドリル径 = 許容下限
-      rec: p2(d + 0.10*P),        // 推奨(やや大きめ)
-      hi:  p2(d + 0.30*P),        // 許容上限(最大・トルク最小・タップ最保護)
-      tight: p2(d - 0.10*P),      // 強度最優先時のみ
+      lo:  p2(d),
+      rec: p2(d),
+      hi:  p2(d),
+      tight: p2(d),
       fixed:true,
       note: th.taper
-        ? '管用テーパねじ JIS B 0203 指定ドリル径基準。許容範囲を大きい径側に設定し高トルクのテーパタップを保護'
-        : '管用平行ねじ JIS B 0202 指定ドリル径基準。許容範囲を大きい径側に設定'
+        ? '管用テーパねじは基準下穴径を固定表示。下穴を大きくすると有効山高さ・ゲージ位置・シール性不足の恐れがあるため、使用タップメーカー表と管用テーパねじゲージで確認'
+        : '管用平行ねじは基準下穴径を固定表示。シール方式(ガスケット/Oリング等)と使用タップメーカー表で確認'
     };
   }
-  // --- 盛上げ(転造)タップ: 切りくずなし。下穴 ≒ D-0.45P (YAMAWA/OSG転造タップ準拠) ---
+  // --- 盛上げ(転造)タップ: 切りくずなし。下穴 ≒ D-0.45P (メーカー表確認必須) ---
   if(typeKey==='form'){
     return {
       lo:  p2(D - 0.55*P),
@@ -258,7 +259,7 @@ function tapPilotDia(D, P, typeKey, th){
       hi:  p2(D - 0.35*P),        // 許容上限(最大)
       tight: p2(D - 0.62*P),
       fixed:false,
-      note:'盛上げ(転造)タップ。許容範囲を大きい径側に設定 — かじり・過大トルクを防止 (YAMAWA/OSG転造タップ準拠)'
+      note:'盛上げ(転造)タップ。許容範囲を大きい径側に設定 — かじり・過大トルクを防止。実値は使用タップメーカー表で確認'
     };
   }
   // --- 切削タップ(M並目/細目・UNC/UNF): 標準 D-P。許容範囲を大きい径側へ ---
@@ -268,7 +269,7 @@ function tapPilotDia(D, P, typeKey, th){
     hi:  p2(D - 0.75*P),          // 許容上限(最大・約58%係合・タップ最保護)
     tight: p2(D - 1.08*P),        // 強度最優先時のみ(約85%係合)
     fixed:false,
-    note:'切削タップ。標準=D-P (JIS B 0209/ISO 724)。許容範囲を大きい径側に設定 — タップ折損リスク低減を優先 (係合率60〜80%で実用強度十分)'
+    note:'切削タップ。標準的な下穴目安=D-P。許容範囲を大きい径側に設定 — タップ折損リスク低減を優先 (係合率60〜80%で実用強度十分)'
   };
 }
 
@@ -312,12 +313,12 @@ function refreshTap(){
         ? '<br><span style="color:var(--txt3);font-size:10px">※盛上げ(転造)ねじは塑性成形のため係合率の概念が切削ねじと異なる</span>'
         : '<br><span style="color:var(--txt3);font-size:10px">※管用ねじは規格指定ドリル径基準（係合率管理ではない）</span>');
   document.getElementById('tap_pilot_panel').innerHTML=
-    `<b>推奨下穴径:</b> <span style="color:#ffd700;font-size:16px;font-weight:800">${pilot.rec} mm</span>
-     <span style="color:var(--txt3);font-size:10px">（やや大きめ・タップ保護優先）</span><br>
-     <b>許容範囲:</b> <span style="color:#86efac;font-weight:700;font-size:13px">${pilot.lo} 〜 ${pilot.hi} mm</span>
-     <span style="color:var(--txt3);font-size:10px">（下限=${pilot.fixed?'JIS規格標準':'標準 D-P'} ／ 上限=最大径・トルク最小・最も安全）</span><br>
+    `<b>${pilot.fixed?'基準下穴径':'推奨下穴径'}:</b> <span style="color:#ffd700;font-size:16px;font-weight:800">${pilot.rec} mm</span>
+     <span style="color:var(--txt3);font-size:10px">（${pilot.fixed?'管用ねじは基準径固定・ゲージ確認':'やや大きめ・タップ保護優先'}）</span><br>
+     <b>${pilot.fixed?'基準範囲':'許容範囲'}:</b> <span style="color:#86efac;font-weight:700;font-size:13px">${pilot.lo} 〜 ${pilot.hi} mm</span>
+     <span style="color:var(--txt3);font-size:10px">（${pilot.fixed?'登録基準径。大きめ変更はメーカー表/ゲージ確認必須':'下限=標準 D-P ／ 上限=最大径・トルク最小案'}）</span><br>
      <span style="color:var(--txt3);font-size:10px">${pilot.note}</span><br>
-     <span style="color:#fcd34d;font-size:10px">💡 迷ったら大きい径を選択 — 下穴大→係合率↓→トルク↓→タップ折損リスク↓。強度を最優先する場合のみ ${pilot.tight}mm まで縮小可。</span>${engInfo}
+     <span style="color:#fcd34d;font-size:10px">${pilot.fixed?'💡 管用ねじは下穴径より、正しいタップ種別・ねじ込み深さ・ゲージ管理を優先。':'💡 迷ったら大きい径を選択 — 下穴大→係合率↓→トルク↓→タップ折損リスク↓。強度を最優先する場合のみ '+pilot.tight+'mm まで縮小可。'}</span>${engInfo}
      ${isTaper?'<br><span style="color:#fcd34d;font-size:10px">⚠ テーパねじはストレートドリル下穴が標準。リーマ仕上げ不要。ねじゲージ(管用テーパ用)で深さ管理。</span>':''}
      ${typeKey==='form'?'<br><span style="color:#fcd34d;font-size:10px">⚠ 盛上げタップは切削タップより大きい下穴径。下穴が小さいとトルク急増・かじり発生。</span>':''}`;
 
@@ -337,8 +338,8 @@ function refreshTap(){
     {l:'タッピングTm(推定)',v:Tm.toFixed(2)+' N·m'},
     {l:'許容トルクTa(安全率込)',v:Tb.toFixed(2)+' N·m'},
     {l:'トルク比 Tm/Ta',v:(torqRatio*100).toFixed(0)+'%'},
-    {l:'推奨下穴径',v:pilot.rec+' mm'},
-    {l:'下穴許容範囲',v:pilot.lo+'〜'+pilot.hi+' mm'},
+    {l:pilot.fixed?'基準下穴径':'推奨下穴径',v:pilot.rec+' mm'},
+    {l:pilot.fixed?'下穴基準範囲':'下穴許容範囲',v:pilot.lo+'〜'+pilot.hi+' mm'},
   ];
   let st,vt;
   if(torqRatio>1.0){st='crit';vt='🚫 タップ破断危険 — 条件変更必須';}
@@ -424,10 +425,10 @@ function calcTap(){
     <div class="res-item"><div class="res-lbl">タッピングトルク Tm(推定)</div><div class="res-val">${Tm.toFixed(2)} N·m</div></div>
     <div class="res-item"><div class="res-lbl">許容トルク Ta(安全率込)</div><div class="res-val">${Tb.toFixed(2)} N·m</div></div>
     <div class="res-item"><div class="res-lbl">トルク比 Tm/Ta</div><div class="res-val" style="color:${torqRatio<0.6?'#86efac':torqRatio<0.8?'#fcd34d':'#fca5a5'}">${(torqRatio*100).toFixed(0)}%</div></div>
-    <div class="res-item res-hl"><div class="res-lbl">🔩 推奨下穴径（やや大きめ・タップ保護）</div><div class="res-val">${pilot.rec} mm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">🔩 ${pilot.fixed?'基準下穴径（管用・ゲージ確認）':'推奨下穴径（やや大きめ・タップ保護）'}</div><div class="res-val">${pilot.rec} mm</div></div>
     ${engRec!==null?`<div class="res-item"><div class="res-lbl">ねじ係合率（推奨下穴）</div><div class="res-val">${engRec.toFixed(0)} %</div></div>`:''}
-    <div class="res-item res-hl"><div class="res-lbl">下穴 許容範囲（下限〜上限）</div><div class="res-val">${pilot.lo} 〜 ${pilot.hi} mm</div></div>
-    <div class="res-item"><div class="res-lbl">強度最優先時のみ（下限以下）</div><div class="res-val">${pilot.tight} mm</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">下穴 ${pilot.fixed?'基準範囲':'許容範囲（下限〜上限）'}</div><div class="res-val">${pilot.lo} 〜 ${pilot.hi} mm</div></div>
+    ${pilot.fixed?'':`<div class="res-item"><div class="res-lbl">強度最優先時のみ（下限以下）</div><div class="res-val">${pilot.tight} mm</div></div>`}
     <div class="res-item"><div class="res-lbl">1穴加工時間</div><div class="res-val">${fmtT(t1)}</div></div>
     <div class="res-item res-hl"><div class="res-lbl">総加工時間 (${holes}穴)</div><div class="res-val">${fmtT(tTotal)}</div></div>`;
 
@@ -467,7 +468,7 @@ function calcTap(){
 ▼ Step3: タップコア径 (${th.angle===55?'55°ウィットワース (G/Rc)':'60°メートル/ユニファイ JIS/ISO 724'})
   dc = D - ${angK}×P = ${D} - ${angK}×${P} = ${dc.toFixed(4)} mm
 
-▼ Step4: タッピングトルク Tm (推定 / JIS B 4430 系経験式)
+▼ Step4: タッピングトルク Tm (推定 / 経験式)
   Tm = 0.035 × Ct × Km × D^2.2 × P^0.8 × fC${isTaper?' × 1.30(テーパ漸進切削)':''}
      = 0.035 × ${tt.Ct}(${tt.name}) × ${tm.Km}(${tm.name})
        × ${D}^2.2 × ${P}^0.8 × ${tc.fC}(${tc.desc})${isTaper?' × 1.30':''}
@@ -485,11 +486,11 @@ function calcTap(){
   評価: ${torqRatio<0.6?'✅ 安全':torqRatio<0.8?'⚠ 注意':torqRatio<1.0?'❗ 危険(条件見直し)':'🚫 トルク超過(条件変更必須)'}
   ※ Tm・Ta とも安全率込みの保守的推定値。実トルクは潤滑・下穴径・材料ロットで±40%程度ばらつく。
 
-▼ Step7: 下穴径推奨 (許容範囲を大きい径側に設定／YAMAWA・OSGカタログ照合済)
+▼ Step7: 下穴径推奨 (${pilot.fixed?'管用ねじは基準径固定・ゲージ確認':'60°切削ねじは低トルク側の案を併記'})
   ${pilot.note}
-  推奨(やや大きめ): ${pilot.rec} mm
-  許容範囲: ${pilot.lo} mm(下限=${pilot.fixed?'JIS規格標準':'標準D-P'}) 〜 ${pilot.hi} mm(上限=最大径)
-  強度最優先時のみ: ${pilot.tight} mm (下限以下・係合率高)
+  ${pilot.fixed?'基準下穴径':'推奨(やや大きめ)'}: ${pilot.rec} mm
+  ${pilot.fixed?'基準範囲':'許容範囲'}: ${pilot.lo} mm(下限=${pilot.fixed?'登録基準径':'標準D-P'}) 〜 ${pilot.hi} mm(${pilot.fixed?'固定':'上限=最大径案'})
+  ${pilot.fixed?'管用ねじは使用タップメーカー表とねじゲージで最終確認':'強度最優先時のみ: '+pilot.tight+' mm (下限以下・係合率高)'}
   ${engRec!==null?`ねじ係合率(目安, 60°ねじ %=76.98×(D−d)/P): 下限${threadEngagement(D,pilot.lo,P).toFixed(0)}% / 推奨${engRec.toFixed(0)}% / 上限${threadEngagement(D,pilot.hi,P).toFixed(0)}%`:'※ 転造/管用ねじは係合率の概念が切削ねじと異なるため非表示'}
   ※ 下穴が大きいほど ねじ係合率↓→タッピングトルク↓→タップ折損リスク↓ (実用強度は係合率60〜80%で十分)
 

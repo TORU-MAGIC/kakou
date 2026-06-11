@@ -70,9 +70,11 @@ function refreshM() {
   const tl=TOOL[tool];
   const db=MAT[mat];
   const coolA=coolantAdjust(cool,mat,tool);
+  const toolWarn=toolMaterialWarning(tool,mat);
   const ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
   document.getElementById('m_tool_desc').innerHTML=`${tl.desc}${getToolChips(tool)}`
-    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨ライン: ${iscarLineHint(mat,'mill')}（ITA要確認）</span>`:'');
+    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨ライン: ${iscarLineHint(mat,'mill')}（ITA要確認）</span>`:'')
+    +(toolWarn?`<br><span style="color:#fca5a5">${toolWarn}</span>`:'');
 
   // 【v4.2】ap/ae・油種を反映した実効Vc（切込みが変われば速度・回転数も変わる）
   // ISCARグレード選択時はベースVcをISCAR推奨値(現行コート超硬)に切替
@@ -182,6 +184,7 @@ function calcM() {
   const iscar=s('m_iscar')||'none';
   const tl=TOOL[tool], db=MAT[mat];
   const coolA=coolantAdjust(cool,mat,tool);
+  const toolWarn=toolMaterialWarning(tool,mat);
   // 【v4.2】ap/ae・油種を反映した実効Vc / 切りくず薄化を反映した送り（ISCAR選択時はベースVc切替）
   const aeF=aeVcFactor(ae,D), apF=apVcFactor(ap,D), ctf=chipThinning(ae,D);
   const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'mill',proc):db.vcM[proc]*tl.vcF;
@@ -244,9 +247,10 @@ function calcM() {
   if(fz<fz_c*0.9) wc.innerHTML+='<div class="info-box ib-purple"><h3>💡 物理上限適用</h3><p>カタログ値より物理上限が小さいため制限されています</p></div>';
   wc.innerHTML+=`<div class="info-box ib-blue"><h3>💧 クーラント: ${coolA.name}</h3><p>${coolA.desc}<br>適用係数: Vc×${coolA.vcF.toFixed(2)} ／ 送り×${coolA.fzF.toFixed(2)}。ae/D=${(ae/D).toFixed(2)}→Vc×${aeF.toFixed(2)}、切りくず薄化×${ctf.toFixed(2)}。</p></div>`;
   if(coolA.warn) wc.innerHTML+=`<div class="info-box ib-yellow"><h3>⚠ 油種の注意</h3><p>${coolA.warn}</p></div>`;
+  if(toolWarn) wc.innerHTML+=`<div class="info-box ib-red"><h3>⚠ 工具材質の相性</h3><p>${toolWarn}</p></div>`;
 
   document.getElementById('m_fml').textContent=
-`【学術級切削条件計算 — ソリッドエンドミル詳細ログ】
+`【切削条件計算 — ソリッドエンドミル詳細ログ】
 
 ▼ Step1: 切削速度 (ap/ae・油種${iscar!=='none'?'・ISCARグレード':''}を反映)
   Vc = ${iscar!=='none'?`${iscarVcRec(mat,'mill',proc)}(ISCAR ${(ISCAR_GRADES[iscar]||{}).name||iscar} 推奨)`:`${db.vcM[proc]}(基準) × ${tl.vcF}(工具)`} × ${coolA.vcF.toFixed(2)}(油種:${coolA.name}) × ${aeF.toFixed(2)}(ae/D=${(ae/D).toFixed(2)}) × ${apF.toFixed(2)}(ap/D=${(ap/D).toFixed(2)})

@@ -39,7 +39,7 @@ function fMaxBoring(ap, mat, barKey, d_bar, OH, Vc, Pm, eta, kr_deg){
   const M_all = bar.sigma*Zb;                    // 許容曲げモーメント [N·mm]
   const Fc_tool = M_all/Math.max(OH,1);          // 突き出し先端で受けられる切削力 [N]
   const Fc_max = Math.min(Fc_motor, Fc_tool);
-  const Kc = 1 + 0.15*Math.cos((kr_deg||75)*Math.PI/180);
+  const Kc = kaprKienzleFactor(mat, kr_deg||75);
   const rhs = Fc_max/(db.Ks1*ap*Kc);
   if(rhs<=0) return {f:0, Fc_motor, Fc_tool, Fc_max, Zb, M_all};
   const f = Math.pow(rhs, 1/(1-db.mc));
@@ -67,6 +67,7 @@ function refreshBoring(){
   const Pm=n('b_motor')||7.5, eta=n('b_eta')||0.80, nmax=n('b_nmax')||8000, torqMax=n('b_torque_max')||80;
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel;
   const cool=s('b_cool')||'wet', coolA=coolantAdjust(cool,mat,tool);
+  const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('b_iscar')||'none', ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
   const shp=insertShapeAdjust(shape, ap, 0, kr);
   const md=BORING_MODE[mode]||BORING_MODE.bore_through;
@@ -77,7 +78,8 @@ function refreshBoring(){
 
   document.getElementById('b_tool_desc').innerHTML=
     `<b>${tl.name}</b>: ${tl.desc}<br>🔷 形状 <b>${shp.name}</b>（ノーズ角 εr=${shp.epsTxt}・送り係数×${shp.strF.toFixed(2)}）<br>${shp.sh.desc}<br>🛠️ ${barDB.name}｜${md.name}｜L/D=${ld.toFixed(1)}（推奨≤${barDB.ldMax}）| κr=${kr}° | Rε=${re}mm | 💧${coolA.name}${getToolChips(tool)}`
-    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨: ${iscarLineHint(mat,'turn')}（ITA要確認）</span>`:'');
+    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨: ${iscarLineHint(mat,'turn')}（ITA要確認）</span>`:'')
+    +(toolWarn?`<br><span style="color:#fca5a5">${toolWarn}</span>`:'');
 
   // ベースVc（ISCAR選択時はISCAR推奨）×油種×ap×モード×L/Dびびり低減
   const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
@@ -182,6 +184,7 @@ function calcBoring(){
   const Pm=n('b_motor')||7.5, eta=n('b_eta')||0.80, nmax=n('b_nmax')||8000, torqMax=n('b_torque_max')||80;
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel;
   const cool=s('b_cool')||'wet', coolA=coolantAdjust(cool,mat,tool);
+  const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('b_iscar')||'none';
   const shp=insertShapeAdjust(shape, ap, 0, kr);
   const md=BORING_MODE[mode]||BORING_MODE.bore_through;
@@ -208,7 +211,7 @@ function calcBoring(){
   const sec=L*pass/F*60;
   const Rz=theorRz(f,re), Ra=(Rz/4).toFixed(3);
   const TaylorT=taylorLife(Vc,mat), Torq=Fc*(D/2)/1000;
-  const Kc=1+0.15*Math.cos(kr*Math.PI/180);
+  const Kc=kaprKienzleFactor(mat,kr);
   const Zb=Math.PI*Math.pow(d_bar,3)/32;
 
   document.getElementById('b_rg').innerHTML=`
@@ -239,6 +242,7 @@ function calcBoring(){
   wc.innerHTML+=`<div class="info-box ${ldcls}"><h3>🛠️ ボーリングバー: ${barDB.name}（L/D=${ld.toFixed(1)} / 推奨≤${barDB.ldMax}）</h3><p>${barDB.desc}<br>先端たわみ δ=Fr·OH³/(3EI)=${(delta*1000).toFixed(1)}μm（Fr≈0.5Fc=${Fr.toFixed(0)}N、I=πd⁴/64=${I.toFixed(0)}mm⁴）。びびり対策で Vc×${vibF.toFixed(2)} を自動適用。${ld>barDB.ldMax?' L/Dが推奨超過→超硬/防振バー・低速・低送り・小apで対応。':''}</p></div>`;
   wc.innerHTML+=`<div class="info-box ib-blue"><h3>💧 クーラント: ${coolA.name} ／ モード: ${md.name}</h3><p>${coolA.desc}<br>${md.desc}<br>適用: Vc×${coolA.vcF.toFixed(2)}(油)×${md.vcF.toFixed(2)}(モード)×${vibF.toFixed(2)}(L/D) ／ 送り×${coolA.fzF.toFixed(2)}×形状${shp.strF.toFixed(2)}×モード${md.fF.toFixed(2)}。</p></div>`;
   if(coolA.warn) wc.innerHTML+=`<div class="info-box ib-yellow"><h3>⚠ 油種の注意</h3><p>${coolA.warn}</p></div>`;
+  if(toolWarn) wc.innerHTML+=`<div class="info-box ib-red"><h3>⚠ 工具材質の相性</h3><p>${toolWarn}</p></div>`;
   if(mode==='bore_blind') wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ 止まり穴中ぐり</h3><p>切りくず排出が最難関。内部給油(クーラントスルー)・ペック・エアブロー併用を推奨。切りくず噛み込みでバー折損リスク。</p></div>';
   if(nlimited) wc.innerHTML+=`<div class="info-box ib-blue"><h3>💡 主軸回転が上限で制限</h3><p>理論S=${S_raw}rpmが主軸上限${nmax}rpmを超過→S=${nmax}rpmにクランプ。実Vcは ${(Math.PI*D*nmax/1000).toFixed(0)} m/minに低下。小径中ぐりは高回転主軸が有利。</p></div>`;
   if(shape==='V'||shape==='D') wc.innerHTML+='<div class="info-box ib-yellow"><h3>💡 倣い系の弱い刃先</h3><p>'+shp.name+'は内角が小さく刃先が弱め。中ぐり荒は内角の大きい C(80°)/W(トライゴン)/S(四角)が安定。仕上げ・倣いに向く。</p></div>';
@@ -253,7 +257,7 @@ function calcBoring(){
 
 ▼ Step1: Vc = ${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR)`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油)×${apTF.toFixed(2)}(ap)×${md.vcF.toFixed(2)}(モード)×${vibF.toFixed(2)}(L/Dびびり) = ${Vc} m/min
 
-▼ Step2: κr補正係数 Kc = 1+0.15×cos(${kr}°) = ${Kc.toFixed(4)}
+▼ Step2: κr補正係数 Kc = sin(${kr}°)^(-mc) = sin(${kr}°)^(-${db.mc}) = ${Kc.toFixed(4)}
 
 ▼ Step3: ボーリングバー曲げ強度（丸シャンク d=${d_bar}mm）
   Zb = π×d³/32 = π×${d_bar}³/32 = ${Zb.toFixed(0)} mm³

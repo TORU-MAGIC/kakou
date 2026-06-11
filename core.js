@@ -220,6 +220,31 @@ function theorRz(f, re) {
   return (f*f/(8*re))*1000; // mm→μm
 }
 
+/* Kienzle式の進入角補正。
+   Sandvik等の標準的な切削力式では、実切削厚 h=f×sin(KAPR) として
+   kc = kc1×h^(-mc) を使うため、旋削/中ぐりでは sin(KAPR)^(-mc) を掛ける。 */
+function kaprKienzleFactor(matKey, kr_deg){
+  const db = MAT[matKey] || MAT.steel;
+  const kr = (kr_deg || 75) * Math.PI / 180;
+  const sinK = Math.max(Math.sin(kr), 0.15);
+  return Math.pow(sinK, -db.mc);
+}
+
+/* 工具材質×被削材の相性警告。計算自体は止めず、専用工具の誤用を見える化する。 */
+function toolMaterialWarning(toolKey, matKey){
+  const nonFerrous = (matKey==='al'||matKey==='al7075'||matKey==='cu'||matKey==='cfrp');
+  if((toolKey==='pcd'||toolKey==='diamond') && !nonFerrous){
+    return '⚠ PCD/Diamond系はアルミ・銅・CFRPなどの非鉄向きです。鋼・SUS・鋳鉄・Ti/Niではメーカー推奨工具へ変更してください。';
+  }
+  if(toolKey==='cbn' && matKey!=='steel_hh'){
+    return '⚠ CBNは主に高硬度焼入鋼向きです。この材料では超硬/PVD/CVD系の推奨グレード確認が必要です。';
+  }
+  if(toolKey==='cermet' && (matKey==='ti'||matKey==='ni'||matKey==='steel_hh'||nonFerrous)){
+    return '⚠ サーメットは主に鋼の連続仕上げ向きです。断続・難削材・非鉄では専用超硬/PCD/CBNを確認してください。';
+  }
+  return '';
+}
+
 /* ================================================================
    【クーラント（油種）モデル】 ★調整可  — 現場の油種でVc/送り/寿命が変わる
    vcF: 切削速度係数 / fzF: 送り(1刃)係数 / 基準=水溶性(wet)

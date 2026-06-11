@@ -16,7 +16,7 @@ const T_F_CAT = {
 /* 旋盤 Fc */
 function turningFc(f, ap, mat, kr_deg) {
   const db = MAT[mat];
-  const Kc = 1 + 0.15*Math.cos((kr_deg||75)*Math.PI/180); // κr補正
+  const Kc = kaprKienzleFactor(mat, kr_deg||75); // κr補正
   return db.Ks1*Math.pow(f,1-db.mc)*ap*Kc;
 }
 
@@ -30,7 +30,7 @@ function fMaxTurning(ap, mat, toolKey, Vc, Pm, eta, kr_deg) {
   const M_all = tl.sigma*tl.rho*Z_shank;
   const Fc_tool = M_all/(2.5*h_s);
   const Fc_max = Math.min(Fc_motor, Fc_tool);
-  const Kc = 1+0.15*Math.cos((kr_deg||75)*Math.PI/180);
+  const Kc = kaprKienzleFactor(mat, kr_deg||75);
   const rhs = Fc_max/(db.Ks1*ap*Kc);
   if(rhs<=0) return {f:0,Fc_max_motor:Fc_motor,Fc_max_tool:Fc_tool,Fc_max};
   const f = Math.pow(rhs, 1/(1-db.mc));
@@ -53,13 +53,15 @@ function refreshT() {
   const cool=s('t_cool')||'wet';
   const iscar=s('t_iscar')||'none';
   const coolA=coolantAdjust(cool,mat,tool);
+  const toolWarn=toolMaterialWarning(tool,mat);
   const ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
   const shp=insertShapeAdjust(shape, ap, 0, kr);   // インサート形状(当たり面=刃先強度)
   const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
 
   document.getElementById('t_tool_desc').innerHTML=
     `<b>${tl.name}</b>: ${tl.desc}<br>🔷 形状 <b>${shp.name}</b>（ノーズ角 εr=${shp.epsTxt}・送り係数×${shp.strF.toFixed(2)}）<br>${shp.sh.desc}<br>κr=${kr}° | Rε=${re}mm | モード:${mode} | 💧${coolA.name}${getToolChips(tool)}`
-    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨: ${iscarLineHint(mat,'turn')}（ITA要確認）</span>`:'');
+    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨: ${iscarLineHint(mat,'turn')}（ITA要確認）</span>`:'')
+    +(toolWarn?`<br><span style="color:#fca5a5">${toolWarn}</span>`:'');
 
   // ISCARグレード選択時はベースVcをISCAR推奨(現行コート超硬)に切替
   const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
@@ -150,6 +152,7 @@ function calcT() {
   const Pm=n('t_motor'), eta=n('t_eta'), torqMax=n('t_torque_max')||200;
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel;
   const cool=s('t_cool')||'wet', coolA=coolantAdjust(cool,mat,tool);
+  const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('t_iscar')||'none';
   const shp=insertShapeAdjust(shape, ap, 0, kr);
   const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
@@ -173,7 +176,7 @@ function calcT() {
   const Ra=(Rz/4).toFixed(3);
   const TaylorT=taylorLife(Vc,mat);
   const Torq=Fc*(D/2)/1000;
-  const Kc=1+0.15*Math.cos(kr*Math.PI/180);
+  const Kc=kaprKienzleFactor(mat,kr);
 
   document.getElementById('t_rg').innerHTML=`
     <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
@@ -199,6 +202,7 @@ function calcT() {
   wc.innerHTML+=`<div class="info-box ib-purple"><h3>🔷 インサート形状: ${shp.name}（当たり面＝刃先強度）</h3><p>${shp.sh.desc}<br>ノーズ角 εr=${shp.epsTxt}（大きいほど刃先が強く高送り可／小さいほど倣い向きで送り控えめ）。送り係数 ×${shp.strF.toFixed(2)}（基準C 80°）を適用。当たり面(切れ刃係合長) b=ap/sinκr=${b_eng.toFixed(2)}mm、切りくず断面 A=ap×f=${area.toFixed(3)}mm²。</p></div>`;
   wc.innerHTML+=`<div class="info-box ib-blue"><h3>💧 クーラント: ${coolA.name}</h3><p>${coolA.desc}<br>適用: Vc×${coolA.vcF.toFixed(2)} ／ 送り×${coolA.fzF.toFixed(2)}×形状${shp.strF.toFixed(2)} ／ 切込みap=${ap}mm→Vc×${apTF.toFixed(2)}(重切削ほど低速)。</p></div>`;
   if(coolA.warn) wc.innerHTML+=`<div class="info-box ib-yellow"><h3>⚠ 油種の注意</h3><p>${coolA.warn}</p></div>`;
+  if(toolWarn) wc.innerHTML+=`<div class="info-box ib-red"><h3>⚠ 工具材質の相性</h3><p>${toolWarn}</p></div>`;
   if(shape==='V'||shape==='D') wc.innerHTML+='<div class="info-box ib-yellow"><h3>💡 倣い系の弱い刃先</h3><p>'+shp.name+'は内角が小さく刃先が弱いため、送り・切込みは控えめに。荒加工は C(80°)/W(トライゴン)/S(四角) など内角の大きい形状が有利。</p></div>';
   if(toolStress>70) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 工具応力高</h3><p>ap低減 or 突き出し短縮</p></div>';
   if(loadP>80) wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ 高負荷</h3><p>ap低減推奨</p></div>';
@@ -213,7 +217,7 @@ function calcT() {
 
 ▼ Step1: Vc = ${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR ${(ISCAR_GRADES[iscar]||{}).name||iscar})`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油種)×${apTF.toFixed(2)}(ap) = ${Vc} m/min${iscar!=='none'?'  ※ISCAR推奨は目安・ITA要確認':''}
 
-▼ Step2: κr補正係数 Kc = 1+0.15×cos(${kr}°) = ${Kc.toFixed(4)}
+▼ Step2: κr補正係数 Kc = sin(${kr}°)^(-mc) = sin(${kr}°)^(-${db.mc}) = ${Kc.toFixed(4)}
 
 ▼ Step3: 工具シャンク強度 (20×20mm標準シャンク)
   Z_shank = 20×20²/6 = ${(20*400/6).toFixed(0)} mm³

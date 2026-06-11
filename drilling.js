@@ -12,6 +12,11 @@ const D_F_CAT = {
   ti:{rough:0.08,finish:0.06},   ni:{rough:0.04,finish:0.03},
 };
 
+/* D_F_CATはD=10mm前後の基準送り。小径は折損/振れに敏感、大径は送り増余地あり。 */
+function drillFeedDiamFactor(D){
+  return interp(D, [[1,0.25],[2,0.38],[3,0.50],[5,0.65],[8,0.85],[10,1.00],[12,1.10],[16,1.25],[20,1.40],[25,1.55],[32,1.75],[40,2.00]]);
+}
+
 /* ドリル実験式トルク (N·m) */
 function drillTorque(D, f, mat) {
   const db = MAT[mat];
@@ -57,12 +62,14 @@ function refreshD() {
   const tl=TOOL[tool];
   const db=MAT[mat]||MAT.steel;
   const tf=tscFactor(tsc);
+  const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('d_iscar')||'none';
   const ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
 
   document.getElementById('d_tool_desc').innerHTML=
     `<b>${tl.name}</b>: ${tl.desc}<br>ドリル種別: ${dType} | TSC: ${tsc} (${tf.desc})`
-    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> 推奨${iscarVcRec(mat,'drill','rough')} m/min基準（SUMOCHAM/CHAMDRILL, ITA要確認）`:'');
+    +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> 推奨${iscarVcRec(mat,'drill','rough')} m/min基準（SUMOCHAM/CHAMDRILL, ITA要確認）`:'')
+    +(toolWarn?`<br><span style="color:#fca5a5">${toolWarn}</span>`:'');
 
   // ISCAR選択時はベースVcをISCARドリル推奨に切替（TSC補正はそのまま掛かる）
   const Vc_b=(iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF;
@@ -101,16 +108,18 @@ function refreshD() {
   const tau_a=tl.sigma*tl.rho/2;
   const T_max_drill=tau_a*Ip/(D/2)/1000;
 
-  const T_max=Math.min(T_max_m, T_max_drill)*torqFactor*torqFactor2;
+  const T_limit=Math.min(T_max_m, T_max_drill);
+  const torqueLoadFactor=torqFactor*torqFactor2;
 
   // f_max
-  const rhs_t=T_max/(0.0987*Math.pow(D,1.8)*(db.Ks1/2100)*pointFactor);
+  const rhs_t=T_limit/(0.0987*Math.pow(D,1.8)*(db.Ks1/2100)*pointFactor*torqueLoadFactor);
   const f_phys=rhs_t>0?Math.pow(rhs_t,1/0.8)*ldF*tf.fF:0;
-  const f_cat=(D_F_CAT[mat]||D_F_CAT.steel)[proc]*ldF*tf.fF;
+  const dF=drillFeedDiamFactor(D);
+  const f_cat=(D_F_CAT[mat]||D_F_CAT.steel)[proc]*dF*ldF*tf.fF;
   const f_real=Math.min(f_phys,f_cat);
 
   document.getElementById('d_fmax').value=p4(f_phys);
-  const T_act=drillTorque(D,f_real,mat)*pointFactor*torqFactor2;
+  const T_act=drillTorque(D,f_real,mat)*pointFactor*torqueLoadFactor;
   const Pc=T_act*2*Math.PI*S_rps/1000;
   const P_av=Pm*eta;
   const loadP=(Pc/P_av)*100;
@@ -121,6 +130,7 @@ function refreshD() {
     {l:'L/D比',v:ld.toFixed(1)},
     {l:'L/D補正',v:'×'+ldF.toFixed(3)},
     {l:'TSC送り補正',v:'×'+tf.fF.toFixed(2)},
+    {l:'径補正(D=10基準)',v:'×'+dF.toFixed(2)},
     {l:'モータ限界T',v:T_max_m.toFixed(4)+' N·m'},
     {l:'ドリル破断T',v:T_max_drill.toFixed(4)+' N·m'},
     {l:'実トルク',v:T_act.toFixed(4)+' N·m'},
@@ -143,7 +153,7 @@ function refreshD() {
 <p style="font-size:11px;line-height:1.9;color:var(--txt2)">
 <b>${tl.name}</b> | ${dType} | TSC:${tsc} ×${tf.fF.toFixed(2)}<br>
 <b>L/D:</b> ${ld.toFixed(1)} / <b>ldF:</b> ×${ldF.toFixed(3)}<br>
-<b>f_phys:</b> ${p4(f_phys)} | <b>f_cat:</b> ${p4(f_cat)}<br>
+<b>f_phys:</b> ${p4(f_phys)} | <b>f_cat:</b> ${p4(f_cat)}（径補正×${dF.toFixed(2)}）<br>
 <b>確定f:</b> <b style="color:#ffd700">${p4(f_real)} mm/rev</b><br>
 <b>破断限界T:</b> ${T_max_drill.toFixed(4)} N·m / <b>実T:</b> ${T_act.toFixed(4)} N·m (${(T_str*100).toFixed(0)}%)
 </p>`;
@@ -157,6 +167,7 @@ function calcD() {
   const dType=s('d_type');
   const pilotOn=s('d_pilot')==='1', d_pilot=pilotOn?n('d_pilot_d'):0;
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel, tf=tscFactor(tsc);
+  const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('d_iscar')||'none';
   const Vc=Math.round((iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF);
   const S=Math.round(Vc*1000/(Math.PI*D));
@@ -172,13 +183,15 @@ function calcD() {
   const Ip=Math.PI*(Math.pow(D,4)-Math.pow(dc,4))/32;
   const tau_a=tl.sigma*tl.rho/2;
   const T_max_drill=tau_a*Ip/(D/2)/1000;
-  const T_max=Math.min(T_max_m,T_max_drill)*torqFactor*torqFactor2;
-  const rhs_t=T_max/(0.0987*Math.pow(D,1.8)*(db.Ks1/2100)*pointFactor);
+  const T_limit=Math.min(T_max_m,T_max_drill);
+  const torqueLoadFactor=torqFactor*torqFactor2;
+  const rhs_t=T_limit/(0.0987*Math.pow(D,1.8)*(db.Ks1/2100)*pointFactor*torqueLoadFactor);
   const f_phys=rhs_t>0?Math.pow(rhs_t,1/0.8)*ldF_v*tf.fF:0;
-  const f_cat=(D_F_CAT[mat]||D_F_CAT.steel)[proc]*ldF_v*tf.fF;
+  const dF=drillFeedDiamFactor(D);
+  const f_cat=(D_F_CAT[mat]||D_F_CAT.steel)[proc]*dF*ldF_v*tf.fF;
   const f=Math.min(f_phys,f_cat);
   const F=Math.round(S*f);
-  const T_act=drillTorque(D,f,mat)*pointFactor*torqFactor2;
+  const T_act=drillTorque(D,f,mat)*pointFactor*torqueLoadFactor;
   const Pc=T_act*2*Math.PI*S_rps/1000;
   const P_av=Pm*eta, loadP=(Pc/P_av)*100;
   // 【整理 v4.1】推定スラスト力(送り分力) Ff [N] — 参考値(±30%程度のばらつき)。
@@ -213,6 +226,7 @@ function calcD() {
   if(needPeck&&tsc==='none') wc.innerHTML+=`<div class="info-box ib-yellow"><h3>💧 TSC推奨</h3><p>L/D=${ld.toFixed(1)}でTSCなし。加工効率と工具寿命の向上のためTSC導入を強く推奨します。</p></div>`;
   if(pilotOn&&d_pilot>0) wc.innerHTML+=`<div class="info-box ib-green"><h3>✅ 下穴効果</h3><p>下穴径${d_pilot}mmにより、実効切削幅${D_eff.toFixed(1)}mm。トルク約${((1-torqFactor2)*100).toFixed(0)}%低減。</p></div>`;
   if(dType==='indexable') wc.innerHTML+=`<div class="info-box ib-blue"><h3>💡 インデキサブルドリル</h3><p>チップ交換式。高送り・大径向き。外周チップと中心チップで役割分担。チップ摩耗管理が重要。</p></div>`;
+  if(toolWarn) wc.innerHTML+=`<div class="info-box ib-red"><h3>⚠ 工具材質の相性</h3><p>${toolWarn}</p></div>`;
 
   document.getElementById('d_fml').textContent=
 `【ドリル加工 学術物理計算ログ】
@@ -220,7 +234,7 @@ function calcD() {
 ドリル種別: ${dType} | 材質: ${tl.name} | TSC: ${tsc}
 被削材: ${db.name} | L/D: ${ld.toFixed(2)}
 
-▼ Step1: Vc = ${db.vcD[proc]}×${tl.vcF}(tl)×${tf.vcF}(tsc) = ${Vc} m/min
+▼ Step1: Vc = ${iscar!=='none'?`${iscarVcRec(mat,'drill','rough')}(ISCAR目安)`:`${db.vcD[proc]}×${tl.vcF}(工具)`}×${tf.vcF}(tsc) = ${Vc} m/min
           S = ${S} rpm
 
 ▼ Step2: ドリルねじり破断限界
@@ -231,13 +245,15 @@ function calcD() {
 
 ▼ Step3: 機械トルク限界
   T_motor = min(Pm×η/(2π×S/60), T_max_spec) = ${T_max_m.toFixed(4)} N·m
-  有効最大T = min × torqFactor(${torqFactor}) × pilotFactor(${torqFactor2.toFixed(3)}) = ${T_max.toFixed(4)} N·m
+  許容T_limit = min(T_motor, T_drill) = ${T_limit.toFixed(4)} N·m
+  実トルク側の低減係数 = drillType(${torqFactor}) × pilotFactor(${torqFactor2.toFixed(3)}) = ${torqueLoadFactor.toFixed(3)}
 
 ▼ Step4: L/D補正 × TSC補正
   L/D = ${ld.toFixed(2)} → ldBase = ${ldFactor(ld,'none').toFixed(3)} → ×tsc_ldF(${tf.ldF}) = ${ldF_v.toFixed(3)}
+  径補正 = ×${dF.toFixed(2)} (D=10mm基準)
   TSC: ${tf.desc}
 
-▼ Step5: f_max逆算 (JIS実験式 T=0.0987×D^1.8×f^0.8×Ks1/2100)
+▼ Step5: f_max逆算 (経験式 T=0.0987×D^1.8×f^0.8×Ks1/2100×各補正)
   f_phys = ${p4(f_phys)} mm/rev | f_cat = ${p4(f_cat)} mm/rev
   確定 f = ${p4(f)} mm/rev
 
