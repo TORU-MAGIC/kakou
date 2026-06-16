@@ -312,6 +312,10 @@ svg.taylor{width:100%;height:120px}
         <option value="IC907">ISCAR IC907 (M/P/S 万能PVD)</option>
       </select>
     </div>
+    <div class="input-group">
+      <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+      <input type="number" id="m_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshM()">
+    </div>
   </div>
 
   <!-- 機械スペック -->
@@ -421,7 +425,7 @@ svg.taylor{width:100%;height:120px}
   <div class="section-title">自動計算結果</div>
   <div class="four-col">
     <div class="input-group">
-      <label>切削速度 Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="m_Vc" class="f-auto" readonly>
     </div>
     <div class="input-group">
@@ -561,6 +565,13 @@ svg.taylor{width:100%;height:120px}
     </div>
   </div>
 
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+      <input type="number" id="fm_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshFM()">
+    </div>
+  </div>
+
   <div class="mach-card">
     <h4>🏭 機械スペック</h4>
     <div class="three-col">
@@ -610,7 +621,7 @@ svg.taylor{width:100%;height:120px}
   </div>
   <div class="three-col">
     <div class="input-group">
-      <label>切削速度 Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="fm_Vc" class="f-auto" readonly>
     </div>
     <div class="input-group">
@@ -725,6 +736,23 @@ svg.taylor{width:100%;height:120px}
     </div>
   </div>
 
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>条件レベル</label>
+      <select id="ie_cond" onchange="refreshIE()">
+        <option value="low">低条件</option>
+        <option value="std" selected>標準条件</option>
+        <option value="high">高条件</option>
+      </select>
+      <div class="hint">低/標準/高を同時に比較表示します</div>
+    </div>
+    <div class="input-group">
+      <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+      <input type="number" id="ie_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshIE()">
+      <div class="hint">入力値を標準Vcとして低/高へ展開</div>
+    </div>
+  </div>
+
   <div class="mach-card">
     <h4>🏭 機械スペック</h4>
     <div class="three-col">
@@ -783,7 +811,7 @@ svg.taylor{width:100%;height:120px}
       <input type="number" id="ie_ae" value="15" step="0.5" oninput="refreshIE()">
     </div>
     <div class="input-group">
-      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="ie_Vc" class="f-auto" readonly>
     </div>
     <div class="input-group">
@@ -871,6 +899,10 @@ svg.taylor{width:100%;height:120px}
         <option value="IC900">ISCAR IC900 (M/S ステンレス・耐熱)</option>
       </select>
     </div>
+    <div class="input-group">
+      <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+      <input type="number" id="hf_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshHF()">
+    </div>
   </div>
 
   <div class="mach-card">
@@ -931,7 +963,7 @@ svg.taylor{width:100%;height:120px}
       <input type="number" id="hf_ae" value="20" step="1" oninput="refreshHF()">
     </div>
     <div class="input-group">
-      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="hf_Vc" class="f-auto" readonly>
     </div>
     <div class="input-group">
@@ -1027,12 +1059,18 @@ svg.taylor{width:100%;height:120px}
     <div class="tool-desc-panel" id="d_tool_desc"></div>
   </div>
 
-  <div class="input-group" style="margin-bottom:14px">
-    <label>🔶 ISCARドリル グレード <span class="tip" data-tip="イスカルの交換ヘッドドリル(SUMOCHAM/CHAMDRILL)グレード。選ぶとベースVcをISCAR推奨(目安)に切替。給油条件は上のTSCで指定。ITA要確認">?</span></label>
-    <select id="d_iscar" onchange="refreshD()">
-      <option value="none" selected>メーカー指定なし（汎用式）</option>
-      <option value="IC908d">ISCAR IC908 (SUMOCHAM / P・M・S)</option>
-    </select>
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>🔶 ISCARドリル グレード <span class="tip" data-tip="イスカルの交換ヘッドドリル(SUMOCHAM/CHAMDRILL)グレード。選ぶとベースVcをISCAR推奨(目安)に切替。給油条件は上のTSCで指定。ITA要確認">?</span></label>
+      <select id="d_iscar" onchange="refreshD()">
+        <option value="none" selected>メーカー指定なし（汎用式）</option>
+        <option value="IC908d">ISCAR IC908 (SUMOCHAM / P・M・S)</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+      <input type="number" id="d_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshD()">
+    </div>
   </div>
 
   <div class="mach-card">
@@ -1098,7 +1136,7 @@ svg.taylor{width:100%;height:120px}
       <input type="number" id="d_pilot_d" step="0.1" placeholder="下穴径" oninput="refreshD()">
     </div>
     <div class="input-group">
-      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="d_Vc" class="f-auto" readonly>
     </div>
   </div>
@@ -1244,6 +1282,10 @@ svg.taylor{width:100%;height:120px}
         <option value="IC806">ISCAR IC806 (S/M チタン・耐熱)</option>
       </select>
     </div>
+    <div class="input-group">
+      <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+      <input type="number" id="t_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshT()">
+    </div>
   </div>
 
   <div class="mach-card">
@@ -1307,7 +1349,7 @@ svg.taylor{width:100%;height:120px}
       <input type="number" id="t_pass" value="1" step="1">
     </div>
     <div class="input-group">
-      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="t_Vc" class="f-auto" readonly>
     </div>
     <div class="input-group">
@@ -1460,6 +1502,23 @@ svg.taylor{width:100%;height:120px}
     <div class="tool-desc-panel" id="b_tool_desc"></div>
   </div>
 
+  <div class="option-grid" style="margin-bottom:14px">
+    <div class="input-group">
+      <label>条件レベル</label>
+      <select id="b_cond" onchange="refreshBoring()">
+        <option value="low">低条件</option>
+        <option value="std" selected>標準条件</option>
+        <option value="high">高条件</option>
+      </select>
+      <div class="hint">低/標準/高を同時に比較表示します</div>
+    </div>
+    <div class="input-group">
+      <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+      <input type="number" id="b_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshBoring()">
+      <div class="hint">入力値を標準Vcとして低/高へ展開</div>
+    </div>
+  </div>
+
   <!-- ボーリングバー -->
   <div class="mach-card" style="background:linear-gradient(135deg,rgba(13,148,136,.12),rgba(8,145,178,.08));border-color:rgba(13,148,136,.35)">
     <h4 style="color:#5eead4">🛠️ ボーリングバー（突き出し剛性 L/D）</h4>
@@ -1549,7 +1608,7 @@ svg.taylor{width:100%;height:120px}
       <input type="number" id="b_pass" value="1" step="1">
     </div>
     <div class="input-group">
-      <label>Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="b_Vc" class="f-auto" readonly>
     </div>
     <div class="input-group">
@@ -1708,6 +1767,10 @@ svg.taylor{width:100%;height:120px}
         <label>主軸最高回転 <span class="unit-tag">[rpm]</span></label>
         <input type="number" id="tap_nmax" value="6000" step="500" oninput="refreshTap()">
       </div>
+      <div class="input-group">
+        <label>基準Vc 手入力 <span class="unit-tag">[m/min]</span></label>
+        <input type="number" id="tap_vc_manual" step="1" placeholder="空欄=自動" oninput="refreshTap()">
+      </div>
     </div>
   </div>
 
@@ -1739,7 +1802,7 @@ svg.taylor{width:100%;height:120px}
   <div class="section-title">自動計算結果</div>
   <div class="four-col">
     <div class="input-group">
-      <label>推奨 Vc ★自動 <span class="unit-tag">[m/min]</span></label>
+      <label>確定 Vc <span class="unit-tag">[m/min]</span></label>
       <input id="tap_Vc" class="f-auto" readonly>
     </div>
     <div class="input-group">
@@ -1828,12 +1891,12 @@ svg.taylor{width:100%;height:120px}
      ※外部JSはHTMLと同じフォルダに置くこと（ダブルクリック起動可）。
      ※?v=… はキャッシュ対策。JSを更新したらこの数字を上げると確実に反映される。
      ============================================================ -->
-<script src="core.js?v=426"></script>
-<script src="milling.js?v=426"></script>
-<script src="drilling.js?v=426"></script>
-<script src="turning.js?v=426"></script>
-<script src="tap.js?v=426"></script>
-<script src="boring.js?v=426"></script>
+<script src="core.js?v=427"></script>
+<script src="milling.js?v=427"></script>
+<script src="drilling.js?v=427"></script>
+<script src="turning.js?v=427"></script>
+<script src="tap.js?v=427"></script>
+<script src="boring.js?v=427"></script>
 <script src="expert.js?v=500"></script>
 <script>
 'use strict';

@@ -293,7 +293,8 @@ function refreshTap(){
 
   // 推奨Vc・S・F (ねじ分類・タップ種別補正込み)
   const vcr=tapVcRec(matKey,toolKey,typeKey,cat);
-  const Vc=vcr.rec;
+  const vcInfo=vcBaseWithManual('tap',vcr.rec);
+  const Vc=vcInfo.base;
   const S_theo=Math.round(Vc*1000/(Math.PI*D));
   const S=Math.min(S_theo,nmax);
   const Vc_act=Math.round(S*Math.PI*D/1000*10)/10;
@@ -390,7 +391,8 @@ function calcTap(){
   const tm=TAP_MAT[matKey]||TAP_MAT.steel, tc=TAP_COOL[coolKey];
 
   const vcr=tapVcRec(matKey,toolKey,typeKey,cat);
-  const Vc=vcr.rec;
+  const vcInfo=vcBaseWithManual('tap',vcr.rec);
+  const Vc=vcInfo.base;
   const S_theo=Math.round(Vc*1000/(Math.PI*D));
   const S=Math.min(S_theo,nmax);
   const Vc_act=Math.round(S*Math.PI*D/1000*10)/10;
@@ -457,6 +459,7 @@ function calcTap(){
 ▼ Step1: 推奨切削速度 Vc (ねじ分類・タップ種別補正込み)
   Vc_range = ${vcr.lo}〜${vcr.hi} m/min | 採用Vc(中央値) = ${Vc} m/min
   ${isPipe?`※ 管用ねじ補正: ${cat==='Rc'?'テーパ ×0.55':'平行 ×0.75'} (低速・潤滑重視)`:''}
+  Vc = ${vcInfo.manual?`${Vc}(手入力)`:`${vcr.rec}(推奨中央値)`} m/min
   S_theo = Vc×1000/(π×D) = ${Vc}×1000/(π×${D}) = ${S_theo} rpm
   S_actual = min(${S_theo}, ${nmax}[上限]) = ${S} rpm
   Vc_actual = S×π×D/1000 = ${Vc_act} m/min

@@ -24,17 +24,37 @@ const BORING_BAR = {
 
 /* ボーリング加工モード係数（Vc・送りの実務補正） */
 const BORING_MODE = {
-  bore_through:{name:'中ぐり(貫通)',   vcF:0.90, fF:1.00, desc:'内径仕上げ・貫通。切りくずは下へ逃がす。標準'},
-  bore_blind:  {name:'中ぐり(止まり)', vcF:0.80, fF:0.90, desc:'止まり穴中ぐり。切りくず排出が最難関→低速・低送り・内部給油/エア必須'},
-  face:        {name:'端面/座ぐり',    vcF:1.00, fF:1.00, desc:'端面・座ぐり。径方向送り。中心付近はVc低下に注意'},
-  chamfer:     {name:'面取り',         vcF:0.95, fF:0.80, desc:'面取り・取り代少。送り控えめで仕上げ重視'},
+  bore_through:{name:'中ぐり(貫通)',   vcF:0.95, fF:1.00, desc:'内径仕上げ・貫通。切りくずは下へ逃がす。標準'},
+  bore_blind:  {name:'中ぐり(止まり)', vcF:0.85, fF:0.90, desc:'止まり穴中ぐり。切りくず排出が最難関→低速・低送り・内部給油/エア必須'},
+  face:        {name:'端面/座ぐり',    vcF:1.05, fF:1.00, desc:'端面・座ぐり。径方向送り。中心付近はVc低下に注意'},
+  chamfer:     {name:'面取り',         vcF:1.00, fF:0.80, desc:'面取り・取り代少。送り控えめで仕上げ重視'},
 };
+
+/* MC1本バイトは旋削用チップで加工する前提。汎用MAT.vcT×工具係数だけだと
+   チップ式として低すぎるため、超硬/コート系は内径加工用の標準Vcを使う。 */
+const BORING_INSERT_VC_BASE = {
+  al:420, al7075:360, steel:170, steel_h:125, steel_hh:65,
+  sus304:110, sus316:95, cast:160, ti:45, ni:30, cu:300
+};
+const BORING_PROC_VC = {rough:1.00, semi:1.15, finish:1.35};
+function boringVcBase(mat, proc, tool, iscar){
+  if(iscar && iscar!=='none') return iscarVcRec(mat,'turn',proc);
+  const insertTool = (tool==='carbide'||tool==='coated'||tool==='altin'||tool==='altisiN'||tool==='cermet'||tool==='cbn'||tool==='pcd');
+  if(insertTool){
+    const base = BORING_INSERT_VC_BASE[mat] || BORING_INSERT_VC_BASE.steel;
+    const toolF = tool==='cermet'?1.10:tool==='cbn'?1.20:tool==='pcd'?1.25:1.00;
+    return Math.round(base*(BORING_PROC_VC[proc]||1.0)*toolF);
+  }
+  const db = MAT[mat] || MAT.steel;
+  const tl = TOOL[tool] || TOOL.carbide;
+  return Math.round(db.vcT[proc]*tl.vcF);
+}
 
 /* ボーリングバー曲げ制約からの f_max（丸シャンク・片持ち先端負荷） */
 function fMaxBoring(ap, mat, barKey, d_bar, OH, Vc, Pm, eta, kr_deg){
   const db  = MAT[mat];
   const bar = BORING_BAR[barKey] || BORING_BAR.steel;
-  const Fc_motor = (Pm*eta*1000*60)/Vc;
+  const Fc_motor = (Pm*eta*1000*60)/Math.max(Vc,1);
   const Zb = Math.PI*Math.pow(d_bar,3)/32;       // 丸断面係数 [mm³]
   const M_all = bar.sigma*Zb;                    // 許容曲げモーメント [N·mm]
   const Fc_tool = M_all/Math.max(OH,1);          // 突き出し先端で受けられる切削力 [N]
@@ -50,7 +70,50 @@ function fMaxBoring(ap, mat, barKey, d_bar, OH, Vc, Pm, eta, kr_deg){
 function boringVibFactor(ld, barKey){
   const bar = BORING_BAR[barKey] || BORING_BAR.steel;
   const r = ld/Math.max(bar.ldMax,1);
-  return interp(r, [[0,1.0],[0.5,1.0],[0.75,0.93],[1.0,0.80],[1.25,0.62],[1.5,0.48],[2.0,0.32]]);
+  return interp(r, [[0,1.0],[0.75,1.0],[1.0,0.90],[1.25,0.72],[1.5,0.55],[2.0,0.35]]);
+}
+
+function calcBoringCore(ctx, cond){
+  const D=ctx.D, ap=ctx.ap, mat=ctx.mat, proc=ctx.proc, tool=ctx.tool;
+  const kr=ctx.kr, re=ctx.re, shape=ctx.shape, mode=ctx.mode, bar=ctx.bar;
+  const d_bar=ctx.d_bar, OH=ctx.OH, Pm=ctx.Pm, eta=ctx.eta, nmax=ctx.nmax, torqMax=ctx.torqMax;
+  const db=MAT[mat]||MAT.steel, coolA=ctx.coolA;
+  const shp=insertShapeAdjust(shape, ap, 0, kr);
+  const md=BORING_MODE[mode]||BORING_MODE.bore_through;
+  const barDB=BORING_BAR[bar]||BORING_BAR.steel;
+  const ld=d_bar>0?OH/d_bar:0;
+  const vibF=boringVibFactor(ld,bar);
+  const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
+  const autoVc=boringVcBase(mat,proc,tool,ctx.iscar)*coolA.vcF*apTF*md.vcF*vibF;
+  const vcInfo=vcBaseWithManual('b',autoVc);
+  const rpm=rpmFromVc(vcInfo.base*cond.vcF,D,nmax);
+  const Vc=rpm.actualVc;
+  const res=fMaxBoring(ap,mat,bar,d_bar,OH,Vc,Pm,eta,kr);
+  const f_base=(T_F_CAT[mat]||T_F_CAT.steel)[proc];
+  const f_cat=f_base*coolA.fzF*shp.strF*md.fF*cond.feedF;
+  const f=Math.min(res.f,f_cat);
+  const F=Math.round(rpm.S*f);
+  const b_eng=ap>0?ap/Math.sin(kr*Math.PI/180):0;
+  const area=ap*f;
+  const Fc=turningFc(f,ap,mat,kr);
+  const Fr=Fc*0.5;
+  const I=Math.PI*Math.pow(d_bar,4)/64;
+  const delta=Fr*Math.pow(OH,3)/(3*barDB.E*I);
+  const Pc=(Fc*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  const toolStress=Fc/res.Fc_tool;
+  const Torq=Fc*(D/2)/1000, torqRatio=Torq/torqMax;
+  const Rz=theorRz(f,re), TaylorT=taylorLife(Vc,mat);
+  return {autoVc, vcManual:vcInfo.manual, vcBase:vcInfo.base, Vc, S:rpm.S, S_t:rpm.theo, nlimited:rpm.limited,
+    res, f_base, f_cat, f, F, b_eng, area, Fc, Fr, I, delta, Pc, loadP, toolStress, Torq, torqRatio, Rz, TaylorT,
+    shp, md, barDB, ld, vibF, apTF, db};
+}
+
+function boringConditionRows(ctx){
+  return ['low','std','high'].map(k=>{
+    const c=CONDITION_LEVEL[k], r=calcBoringCore(ctx,c);
+    return {name:c.name, Vc:r.Vc, S:r.S, limited:r.nlimited, feed:p4(r.f)+' mm/rev', F:r.F, load:r.loadP.toFixed(0)};
+  });
 }
 
 /* ================================================================
@@ -69,6 +132,8 @@ function refreshBoring(){
   const cool=s('b_cool')||'wet', coolA=coolantAdjust(cool,mat,tool);
   const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('b_iscar')||'none', ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
+  const cond=conditionLevel('b');
+  const ctx={D,ap,mat,proc,tool,kr,re,shape,mode,bar,d_bar,OH,Pm,eta,nmax,torqMax,coolA,iscar};
   const shp=insertShapeAdjust(shape, ap, 0, kr);
   const md=BORING_MODE[mode]||BORING_MODE.bore_through;
   const barDB=BORING_BAR[bar]||BORING_BAR.steel;
@@ -77,14 +142,12 @@ function refreshBoring(){
   const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
 
   document.getElementById('b_tool_desc').innerHTML=
-    `<b>${tl.name}</b>: ${tl.desc}<br>🔷 形状 <b>${shp.name}</b>（ノーズ角 εr=${shp.epsTxt}・送り係数×${shp.strF.toFixed(2)}）<br>${shp.sh.desc}<br>🛠️ ${barDB.name}｜${md.name}｜L/D=${ld.toFixed(1)}（推奨≤${barDB.ldMax}）| κr=${kr}° | Rε=${re}mm | 💧${coolA.name}${getToolChips(tool)}`
+    `<b>${tl.name}</b>: ${tl.desc}<br>🔷 形状 <b>${shp.name}</b>（ノーズ角 εr=${shp.epsTxt}・送り係数×${shp.strF.toFixed(2)}）<br>${shp.sh.desc}<br>🛠️ ${barDB.name}｜${md.name}｜${cond.name}｜L/D=${ld.toFixed(1)}（推奨≤${barDB.ldMax}）| κr=${kr}° | Rε=${re}mm | 💧${coolA.name}${getToolChips(tool)}`
     +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — ${ig.desc}<br><span style="color:var(--txt3)">推奨: ${iscarLineHint(mat,'turn')}（ITA要確認）</span>`:'')
     +(toolWarn?`<br><span style="color:#fca5a5">${toolWarn}</span>`:'');
 
-  // ベースVc（ISCAR選択時はISCAR推奨）×油種×ap×モード×L/Dびびり低減
-  const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
-  const Vc_b=Vc_base0*coolA.vcF*apTF*md.vcF*vibF;
-  document.getElementById('b_Vc').value=Math.round(Vc_b);
+  const r=calcBoringCore(ctx,cond);
+  document.getElementById('b_Vc').value=r.Vc;
 
   if(!D||D<=0||!ap||ap<=0||d_bar<=0){
     ['b_f','b_S','b_F','b_fmax'].forEach(id=>document.getElementById(id).value='');
@@ -93,30 +156,11 @@ function refreshBoring(){
     setBtn('b_btn',false);return;
   }
 
-  const Vc=Math.round(Vc_b);
-  const res=fMaxBoring(ap,mat,bar,d_bar,OH,Vc,Pm,eta,kr);
-  const f_base=(T_F_CAT[mat]||T_F_CAT.steel)[proc];
-  const f_cat=f_base*coolA.fzF*shp.strF*md.fF;
-  const f_real=Math.min(res.f,f_cat);
-
-  let S=Math.round(Vc*1000/(Math.PI*D));
-  let nlimited=false;
-  if(S>nmax){S=nmax;nlimited=true;}
-  const F=Math.round(S*f_real);
-  const b_eng=ap>0?ap/Math.sin(kr*Math.PI/180):0;
-  const area=ap*f_real;
-
-  // 切削力・先端たわみ（片持ち梁）
-  const Fc=turningFc(f_real,ap,mat,kr);
-  const Fr=Fc*0.5;                                   // 径方向たわみに効く代表合力(送り分力+背分力の代表値)
-  const I=Math.PI*Math.pow(d_bar,4)/64;              // 断面二次モーメント [mm⁴]
-  const delta=Fr*Math.pow(OH,3)/(3*barDB.E*I);       // 先端たわみ [mm]
-  const Pc=(Fc*Vc)/(60*1000);
-  const P_av=Pm*eta, loadP=(Pc/P_av)*100;
-  const toolStress=Fc/res.Fc_tool;
-  const Torq=Fc*(D/2)/1000, torqRatio=Torq/torqMax;
-  const TaylorT=taylorLife(Vc,mat);
-  const Rz=theorRz(f_real,re);
+  const Vc=r.Vc, res=r.res, f_base=r.f_base, f_cat=r.f_cat, f_real=r.f;
+  const S=r.S, nlimited=r.nlimited, F=r.F, b_eng=r.b_eng, area=r.area;
+  const Fc=r.Fc, Fr=r.Fr, I=r.I, delta=r.delta, Pc=r.Pc, loadP=r.loadP;
+  const toolStress=r.toolStress, Torq=r.Torq, torqRatio=r.torqRatio, TaylorT=r.TaylorT, Rz=r.Rz;
+  const rows=boringConditionRows(ctx);
 
   // L/D 判定
   let ldSt,ldTxt;
@@ -141,6 +185,8 @@ function refreshBoring(){
   const feasible=f_real>=0.003&&toolStress<=1.0&&loadP<=100&&torqRatio<=1.0&&ld<=barDB.ldMax*1.25;
 
   const items=[
+    {l:'条件レベル',v:cond.name},
+    {l:'基準Vc',v:Math.round(r.vcBase)+' m/min'+(r.vcManual?' 手入力':' 自動')},
     {l:'主軸回転 S',v:S+' rpm'},
     {l:'送り速度 F',v:F+' mm/min'},
     {l:'確定 f',v:p4(f_real)+' mm/rev'},
@@ -166,13 +212,14 @@ function refreshBoring(){
 
   document.getElementById('b_rec_body').innerHTML=`
 <p style="font-size:11px;line-height:1.9;color:var(--txt2)">
-<b>${iscar!=='none'?ig.name:tl.name}</b> | 🔷${shp.name} εr=${shp.epsTxt} | 🛠️${barDB.name} | ${md.name}<br>
-<b>Vc=</b>${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR)`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油)×${apTF.toFixed(2)}(ap)×${md.vcF.toFixed(2)}(モード)×${vibF.toFixed(2)}(L/D)=<b style="color:#ffd700">${Vc} m/min</b><br>
+<b>${iscar!=='none'?ig.name:tl.name}</b> | 🔷${shp.name} εr=${shp.epsTxt} | 🛠️${barDB.name} | ${md.name} | ${r.vcManual?'手入力Vc':'自動Vc'}<br>
+<b>Vc=</b>${Math.round(r.vcBase)}×${cond.vcF.toFixed(2)}=<b style="color:#ffd700">${Vc} m/min</b>（油×${coolA.vcF.toFixed(2)} / ap×${apTF.toFixed(2)} / モード×${md.vcF.toFixed(2)} / L/D×${vibF.toFixed(2)}）<br>
 <b>確定f:</b> <b style="color:#ffd700">${p4(f_real)} mm/rev</b> → <b>F:</b> <b style="color:#ffd700">${F} mm/min</b>（S=${S}rpm${nlimited?'・上限':''}）<br>
 <b>当たり面 b:</b> ${b_eng.toFixed(2)} mm | <b>断面A:</b> ${area.toFixed(3)} mm²<br>
 <b>L/D:</b> ${ld.toFixed(1)}（≤${barDB.ldMax}）${ldTxt} | <b>δ:</b> ${(delta*1000).toFixed(1)} μm<br>
 <b>Fc:</b> ${Fc.toFixed(0)} N | <b>Torq:</b> ${Torq.toFixed(1)} N·m | <b>Rz:</b> ${Rz.toFixed(2)} μm
-</p>`;
+</p>
+${conditionRowsHtml(rows,'f')}`;
 }
 
 function calcBoring(){
@@ -186,37 +233,29 @@ function calcBoring(){
   const cool=s('b_cool')||'wet', coolA=coolantAdjust(cool,mat,tool);
   const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('b_iscar')||'none';
+  const cond=conditionLevel('b');
+  const ctx={D,ap,mat,proc,tool,kr,re,shape,mode,bar,d_bar,OH,Pm,eta,nmax,torqMax,coolA,iscar};
   const shp=insertShapeAdjust(shape, ap, 0, kr);
   const md=BORING_MODE[mode]||BORING_MODE.bore_through;
   const barDB=BORING_BAR[bar]||BORING_BAR.steel;
   const ld=d_bar>0?OH/d_bar:0, vibF=boringVibFactor(ld,bar);
-  const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
-  const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
-  const Vc=Math.round(Vc_base0*coolA.vcF*apTF*md.vcF*vibF);
-  const res=fMaxBoring(ap,mat,bar,d_bar,OH,Vc,Pm,eta,kr);
-  const f_base=(T_F_CAT[mat]||T_F_CAT.steel)[proc];
-  const f_cat=f_base*coolA.fzF*shp.strF*md.fF;
-  const f=Math.min(res.f,f_cat);
-  let S=Math.round(Vc*1000/(Math.PI*D)), nlimited=false;
-  const S_raw=S;
-  if(S>nmax){S=nmax;nlimited=true;}
-  const F=Math.round(S*f);
-  const b_eng=ap>0?ap/Math.sin(kr*Math.PI/180):0, area=ap*f;
-  const Fc=turningFc(f,ap,mat,kr), Fr=Fc*0.5;
-  const I=Math.PI*Math.pow(d_bar,4)/64;
-  const delta=Fr*Math.pow(OH,3)/(3*barDB.E*I);
-  const Pc=(Fc*Vc)/(60*1000), P_av=Pm*eta, loadP=(Pc/P_av)*100;
-  const toolStress=(Fc/res.Fc_tool)*100;
+  const r=calcBoringCore(ctx,cond);
+  const apTF=r.apTF, Vc=r.Vc, res=r.res, f_base=r.f_base, f_cat=r.f_cat, f=r.f;
+  const S=r.S, nlimited=r.nlimited, S_raw=r.S_t, F=r.F, b_eng=r.b_eng, area=r.area;
+  const Fc=r.Fc, Fr=r.Fr, I=r.I, delta=r.delta, Pc=r.Pc, loadP=r.loadP;
+  const toolStress=r.toolStress*100;
   const MRR=ap*f*Vc;
   const sec=L*pass/F*60;
-  const Rz=theorRz(f,re), Ra=(Rz/4).toFixed(3);
-  const TaylorT=taylorLife(Vc,mat), Torq=Fc*(D/2)/1000;
+  const Rz=r.Rz, Ra=(Rz/4).toFixed(3);
+  const TaylorT=r.TaylorT, Torq=r.Torq;
   const Kc=kaprKienzleFactor(mat,kr);
   const Zb=Math.PI*Math.pow(d_bar,3)/32;
+  const rows=boringConditionRows(ctx);
 
   document.getElementById('b_rg').innerHTML=`
     <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm${nlimited?' (上限)':''}</div></div>
     <div class="res-item res-hl"><div class="res-lbl">🏆 送り速度 F</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">条件レベル</div><div class="res-val">${cond.name}</div></div>
     <div class="res-item"><div class="res-lbl">切削速度 Vc</div><div class="res-val">${Vc} m/min</div></div>
     <div class="res-item"><div class="res-lbl">確定 f (送り/回転)</div><div class="res-val">${p4(f)} mm/rev</div></div>
     <div class="res-item"><div class="res-lbl">🔷 インサート形状</div><div class="res-val" style="font-size:13px">${shp.name}</div></div>
@@ -240,7 +279,7 @@ function calcBoring(){
   wc.innerHTML+=`<div class="info-box ib-purple"><h3>🔷 インサート形状: ${shp.name}（当たり面＝刃先強度）</h3><p>${shp.sh.desc}<br>ノーズ角 εr=${shp.epsTxt}（大きいほど刃先が強く高送り可／小さいほど倣い向きで送り控えめ）。送り係数 ×${shp.strF.toFixed(2)}（基準C 80°）を適用。当たり面(切れ刃係合長) b=ap/sinκr=${b_eng.toFixed(2)}mm、切りくず断面 A=ap×f=${area.toFixed(3)}mm²。</p></div>`;
   const ldcls = ld<=barDB.ldMax?'ib-green':ld<=barDB.ldMax*1.25?'ib-yellow':'ib-red';
   wc.innerHTML+=`<div class="info-box ${ldcls}"><h3>🛠️ ボーリングバー: ${barDB.name}（L/D=${ld.toFixed(1)} / 推奨≤${barDB.ldMax}）</h3><p>${barDB.desc}<br>先端たわみ δ=Fr·OH³/(3EI)=${(delta*1000).toFixed(1)}μm（Fr≈0.5Fc=${Fr.toFixed(0)}N、I=πd⁴/64=${I.toFixed(0)}mm⁴）。びびり対策で Vc×${vibF.toFixed(2)} を自動適用。${ld>barDB.ldMax?' L/Dが推奨超過→超硬/防振バー・低速・低送り・小apで対応。':''}</p></div>`;
-  wc.innerHTML+=`<div class="info-box ib-blue"><h3>💧 クーラント: ${coolA.name} ／ モード: ${md.name}</h3><p>${coolA.desc}<br>${md.desc}<br>適用: Vc×${coolA.vcF.toFixed(2)}(油)×${md.vcF.toFixed(2)}(モード)×${vibF.toFixed(2)}(L/D) ／ 送り×${coolA.fzF.toFixed(2)}×形状${shp.strF.toFixed(2)}×モード${md.fF.toFixed(2)}。</p></div>`;
+  wc.innerHTML+=`<div class="info-box ib-blue"><h3>💧 クーラント: ${coolA.name} ／ モード: ${md.name} ／ ${cond.name}</h3><p>${coolA.desc}<br>${md.desc}<br>適用: Vc×${coolA.vcF.toFixed(2)}(油)×${md.vcF.toFixed(2)}(モード)×${vibF.toFixed(2)}(L/D)×条件${cond.vcF.toFixed(2)} ／ 送り×${coolA.fzF.toFixed(2)}×形状${shp.strF.toFixed(2)}×モード${md.fF.toFixed(2)}×条件${cond.feedF.toFixed(2)}。</p></div>`;
   if(coolA.warn) wc.innerHTML+=`<div class="info-box ib-yellow"><h3>⚠ 油種の注意</h3><p>${coolA.warn}</p></div>`;
   if(toolWarn) wc.innerHTML+=`<div class="info-box ib-red"><h3>⚠ 工具材質の相性</h3><p>${toolWarn}</p></div>`;
   if(mode==='bore_blind') wc.innerHTML+='<div class="info-box ib-yellow"><h3>⚠ 止まり穴中ぐり</h3><p>切りくず排出が最難関。内部給油(クーラントスルー)・ペック・エアブロー併用を推奨。切りくず噛み込みでバー折損リスク。</p></div>';
@@ -251,11 +290,12 @@ function calcBoring(){
   document.getElementById('b_fml').textContent=
 `【MC 1本バイト / ボーリング(中ぐり) 物理計算ログ】
 
-工具: ${tl.name} | 🔷形状 ${shp.name}(εr=${shp.epsTxt}) | 🛠️${barDB.name} | ${md.name}
+工具: ${tl.name} | 🔷形状 ${shp.name}(εr=${shp.epsTxt}) | 🛠️${barDB.name} | ${md.name} | ${cond.name}
 材料: ${db.name} | Ks1=${db.Ks1} N/mm² | mc=${db.mc}
 バー: d=${d_bar}mm | OH=${OH}mm | L/D=${ld.toFixed(2)} | σ_allow=${barDB.sigma}MPa | E=${barDB.E}MPa | 推奨L/D≤${barDB.ldMax}
 
-▼ Step1: Vc = ${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR)`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油)×${apTF.toFixed(2)}(ap)×${md.vcF.toFixed(2)}(モード)×${vibF.toFixed(2)}(L/Dびびり) = ${Vc} m/min
+▼ Step1: Vc = ${Math.round(r.vcBase)}${r.vcManual?'(手入力標準Vc)':'(自動標準Vc)'}×${cond.vcF.toFixed(2)}(条件) = ${Vc} m/min
+  自動標準Vcの内訳: ${boringVcBase(mat,proc,tool,iscar)}×${coolA.vcF.toFixed(2)}(油)×${apTF.toFixed(2)}(ap)×${md.vcF.toFixed(2)}(モード)×${vibF.toFixed(2)}(L/D)
 
 ▼ Step2: κr補正係数 Kc = sin(${kr}°)^(-mc) = sin(${kr}°)^(-${db.mc}) = ${Kc.toFixed(4)}
 
@@ -270,7 +310,7 @@ function calcBoring(){
 
 ▼ Step5: f_max逆算 (Kienzle式+κr補正) ＋ インサート形状補正
   f_phys = (Fc_max/(Ks1×ap×Kc))^(1/(1-mc)) = ${p4(res.f)} mm/rev
-  f_cat = ${p4(f_base)}(材料/区分)×油種${coolA.fzF.toFixed(2)}×形状${shp.strF.toFixed(2)}(${shape}:εr${shp.epsTxt})×モード${md.fF.toFixed(2)} = ${p4(f_cat)} mm/rev
+  f_cat = ${p4(f_base)}(材料/区分)×油種${coolA.fzF.toFixed(2)}×形状${shp.strF.toFixed(2)}(${shape}:εr${shp.epsTxt})×モード${md.fF.toFixed(2)}×条件${cond.feedF.toFixed(2)} = ${p4(f_cat)} mm/rev
   確定 f = min(f_phys, f_cat) = ${p4(f)} mm/rev
 
 ▼ Step6: 当たり面（切れ刃の係合・形状考慮）
@@ -291,7 +331,10 @@ function calcBoring(){
   T = (${db.C_T}/Vc)^${db.n_T} = ${TaylorT.toFixed(0)} min @ Vc=${Vc} m/min
   Fc = ${db.Ks1}×${p4(f)}^${(1-db.mc).toFixed(2)}×${ap}×${Kc.toFixed(4)} = ${Fc.toFixed(0)} N
   Torq = Fc×(D/2)/1000 = ${Torq.toFixed(1)} N·m | Pc = ${Pc.toFixed(2)} kW / 負荷${loadP.toFixed(0)}%
-  MRR = ap×f×Vc = ${ap}×${p4(f)}×${Vc} = ${MRR.toFixed(2)} cm³/min`;
+  MRR = ap×f×Vc = ${ap}×${p4(f)}×${Vc} = ${MRR.toFixed(2)} cm³/min
+
+低/標準/高:
+${rows.map(x=>`${x.name}: Vc${x.Vc} / S${x.S} / f${x.feed} / F${x.F} / 負荷${x.load}%`).join('\n')}`;
   document.getElementById('b_result_wrap').classList.remove('hidden');
   addCompare({type:'MC1本バイト('+shape+'/'+mode.replace('bore_','')+')',mat:db.name,D,Vc,S,fz:p4(f),F,Fc:Fc.toFixed(0),Pc:Pc.toFixed(2),load:loadP.toFixed(0),MRR:MRR.toFixed(2)+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80&&toolStress<=80&&ld<=barDB.ldMax});
 }

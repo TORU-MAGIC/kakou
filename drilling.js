@@ -72,7 +72,9 @@ function refreshD() {
     +(toolWarn?`<br><span style="color:#fca5a5">${toolWarn}</span>`:'');
 
   // ISCAR選択時はベースVcをISCARドリル推奨に切替（TSC補正はそのまま掛かる）
-  const Vc_b=(iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF;
+  const Vc_auto=(iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF;
+  const vcInfo=vcBaseWithManual('d',Vc_auto);
+  const Vc_b=vcInfo.base;
   document.getElementById('d_Vc').value=Math.round(Vc_b);
 
   // TSC情報表示
@@ -169,7 +171,9 @@ function calcD() {
   const tl=TOOL[tool], db=MAT[mat]||MAT.steel, tf=tscFactor(tsc);
   const toolWarn=toolMaterialWarning(tool,mat);
   const iscar=s('d_iscar')||'none';
-  const Vc=Math.round((iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF);
+  const Vc_auto=(iscar!=='none'?iscarVcRec(mat,'drill','rough'):db.vcD[proc]*tl.vcF)*tf.vcF;
+  const vcInfo=vcBaseWithManual('d',Vc_auto);
+  const Vc=Math.round(vcInfo.base);
   const S=Math.round(Vc*1000/(Math.PI*D));
   const ld=L/D;
   const ldF_v=ldFactor(ld,tsc);
@@ -234,7 +238,7 @@ function calcD() {
 ドリル種別: ${dType} | 材質: ${tl.name} | TSC: ${tsc}
 被削材: ${db.name} | L/D: ${ld.toFixed(2)}
 
-▼ Step1: Vc = ${iscar!=='none'?`${iscarVcRec(mat,'drill','rough')}(ISCAR目安)`:`${db.vcD[proc]}×${tl.vcF}(工具)`}×${tf.vcF}(tsc) = ${Vc} m/min
+▼ Step1: Vc = ${vcInfo.manual?`${Math.round(vcInfo.base)}(手入力)`:`${iscar!=='none'?`${iscarVcRec(mat,'drill','rough')}(ISCAR目安)`:`${db.vcD[proc]}×${tl.vcF}(工具)`}×${tf.vcF}(tsc)`} = ${Vc} m/min
           S = ${S} rpm
 
 ▼ Step2: ドリルねじり破断限界

@@ -65,7 +65,9 @@ function refreshT() {
 
   // ISCARグレード選択時はベースVcをISCAR推奨(現行コート超硬)に切替
   const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
-  const Vc_b=Vc_base0*coolA.vcF*apTF;
+  const Vc_auto=Vc_base0*coolA.vcF*apTF;
+  const vcInfo=vcBaseWithManual('t',Vc_auto);
+  const Vc_b=vcInfo.base;
   document.getElementById('t_Vc').value=Math.round(Vc_b);
 
   if(!D||D<=0||!ap||ap<=0){document.getElementById('t_f').value='';setBtn('t_btn',false);
@@ -157,7 +159,9 @@ function calcT() {
   const shp=insertShapeAdjust(shape, ap, 0, kr);
   const apTF=ap>0?interp(ap,[[0.5,1.06],[1,1.02],[2,1.00],[3,0.95],[5,0.88],[8,0.80],[12,0.72]]):1.0;
   const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'turn',proc):db.vcT[proc]*tl.vcF;
-  const Vc=Math.round(Vc_base0*coolA.vcF*apTF);
+  const Vc_auto=Vc_base0*coolA.vcF*apTF;
+  const vcInfo=vcBaseWithManual('t',Vc_auto);
+  const Vc=Math.round(vcInfo.base);
   const res=fMaxTurning(ap,mat,tool,Vc,Pm,eta,kr);
   const f_base=(T_F_CAT[mat]||T_F_CAT.steel)[proc];
   const f_cat=f_base*coolA.fzF*shp.strF;          // 形状(刃先強度)で送りを補正
@@ -215,7 +219,7 @@ function calcT() {
 工具: ${tl.name} | 🔷形状 ${shp.name}(εr=${shp.epsTxt}) | κr=${kr}° | Rε=${re}mm | モード:${mode}
 材料: ${db.name} | Ks1=${db.Ks1} N/mm² | mc=${db.mc}
 
-▼ Step1: Vc = ${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR ${(ISCAR_GRADES[iscar]||{}).name||iscar})`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油種)×${apTF.toFixed(2)}(ap) = ${Vc} m/min${iscar!=='none'?'  ※ISCAR推奨は目安・ITA要確認':''}
+▼ Step1: Vc = ${vcInfo.manual?`${Math.round(vcInfo.base)}(手入力)`:`${iscar!=='none'?`${iscarVcRec(mat,'turn',proc)}(ISCAR ${(ISCAR_GRADES[iscar]||{}).name||iscar})`:`${db.vcT[proc]}×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油種)×${apTF.toFixed(2)}(ap)`} = ${Vc} m/min${iscar!=='none'?'  ※ISCAR推奨は目安・ITA要確認':''}
 
 ▼ Step2: κr補正係数 Kc = sin(${kr}°)^(-mc) = sin(${kr}°)^(-${db.mc}) = ${Kc.toFixed(4)}
 

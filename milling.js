@@ -41,6 +41,76 @@ const M_FZ_CAT = {
   cfrp:{rough:0.060,semi:0.040,finish:0.025},
 };
 
+/* チップ式エンドミル（インデキサブル）専用の実務寄り基準。
+   MAT.vcMはソリッド/HSS寄りの保守値なので、チップ式は別テーブルで持つ。 */
+const IE_VC_BASE = {
+  al:360, al7075:330, steel:150, steel_h:115, steel_hh:45,
+  sus304:100, sus316:85, cast:150, ti:45, ni:30, cu:280, cfrp:140
+};
+const IE_PROC_VC = {rough:1.00, semi:1.12, finish:1.28};
+const IE_GRADE_VC_F = {
+  P10:1.15, P20:1.05, P30:0.92, M10:1.08, M20:1.00,
+  K10:1.10, K20:1.00, N10:1.18, S10:0.92, S20:0.86, H10:1.05
+};
+const IE_FZ_CAT = {
+  al:{rough:0.20,semi:0.14,finish:0.08},
+  al7075:{rough:0.18,semi:0.13,finish:0.07},
+  steel:{rough:0.18,semi:0.12,finish:0.06},
+  steel_h:{rough:0.13,semi:0.09,finish:0.045},
+  steel_hh:{rough:0.055,semi:0.035,finish:0.020},
+  sus304:{rough:0.12,semi:0.08,finish:0.040},
+  sus316:{rough:0.10,semi:0.07,finish:0.035},
+  cast:{rough:0.18,semi:0.12,finish:0.060},
+  ti:{rough:0.070,semi:0.050,finish:0.025},
+  ni:{rough:0.045,semi:0.030,finish:0.018},
+  cu:{rough:0.20,semi:0.14,finish:0.08},
+  cfrp:{rough:0.12,semi:0.08,finish:0.05},
+};
+function ieVcBase(mat, proc, grade, iscar){
+  if(iscar && iscar!=='none') return iscarVcRec(mat,'mill',proc);
+  const base = IE_VC_BASE[mat] || IE_VC_BASE.steel;
+  return Math.round(base*(IE_PROC_VC[proc]||1.0)*(IE_GRADE_VC_F[grade]||1.0));
+}
+function ieFzDiamFactor(D){
+  return D<=16?0.85:D<=25?1.00:D<=32?1.08:D<=50?1.15:1.22;
+}
+function ieKrFeedFactor(kr){
+  return interp(kr, [[30,1.18],[45,1.10],[60,1.04],[90,1.00]]);
+}
+function ieShapeFeedFactor(shape){
+  return ({sq:0.95, rd:1.05, ball:0.75})[shape] || 1.0;
+}
+function calcIECore(ctx, cond){
+  const D=ctx.D, Z=ctx.Z, mat=ctx.mat, grade=ctx.grade, kr=ctx.kr, ap=ctx.ap, ae=ctx.ae;
+  const proc=ctx.proc, Pm=ctx.Pm, eta=ctx.eta, nmax=ctx.nmax, coolA=ctx.coolA;
+  const gd=GRADE[grade]||GRADE.P20;
+  const aeUse=Math.min(ae,D);
+  const aeF=(ae>0&&D>0)?aeVcFactor(aeUse,D):1.0;
+  const apF=(ap>0&&D>0)?apVcFactor(ap,D):1.0;
+  const ctf=(ae>0&&D>0)?chipThinning(aeUse,D):1.0;
+  const autoVc=ieVcBase(mat,proc,grade,ctx.iscar)*coolA.vcF*aeF*apF;
+  const vcInfo=vcBaseWithManual('ie',autoVc);
+  const targetVc=vcInfo.base*cond.vcF;
+  const rpm=rpmFromVc(targetVc,D,nmax);
+  const Vc=rpm.actualVc;
+  const fz_max=fzMaxMilling(aeUse,D,ap,Z,mat,420*gd.fzF,0.72,Vc,Pm,eta,D*0.45);
+  const baseFz=(IE_FZ_CAT[mat]||IE_FZ_CAT.steel)[proc];
+  const fz_cat=baseFz*gd.fzF*ieFzDiamFactor(D)*ieKrFeedFactor(kr)*ieShapeFeedFactor(ctx.shape)*coolA.fzF*ctf*cond.feedF;
+  const fz=Math.min(fz_max,fz_cat);
+  const F=Math.round(rpm.S*fz*Z);
+  const FcT=FcTotal(fz,aeUse,D,ap,Z,mat);
+  const Pc=(FcT*Vc)/(60*1000);
+  const loadP=(Pc/(Pm*eta))*100;
+  return {autoVc, vcManual:vcInfo.manual, vcBase:vcInfo.base, targetVc, Vc, S:rpm.S, S_t:rpm.theo, nlimited:rpm.limited,
+    fz_max, fz_cat, fz, F, FcT, Pc, loadP, aeF, apF, ctf, baseFz};
+}
+function ieConditionRows(ctx){
+  return ['low','std','high'].map(k=>{
+    const c=CONDITION_LEVEL[k], r=calcIECore(ctx,c);
+    return {name:c.name, Vc:r.Vc, S:r.S, limited:r.nlimited, feed:p4(r.fz)+' mm/刃', F:r.F, load:r.loadP.toFixed(0)};
+  });
+}
+
 /* アプローチ角補正係数 κr → 軸方向分力比 */
 function krAxialRatio(kr_deg) {
   const kr = kr_deg*Math.PI/180;
@@ -83,7 +153,9 @@ function refreshM() {
   const apF=(D>0&&ap>0)?apVcFactor(ap,D):1.0;   // 軸方向切込み → 深いほど微減
   const ctf=(D>0&&ae>0)?chipThinning(ae,D):1.0; // 切りくず薄化 → ae<D/2で送り増可
   const Vc_base=(iscar!=='none')?iscarVcRec(mat,'mill',proc):db.vcM[proc]*tl.vcF;
-  const Vc_eff=Vc_base*coolA.vcF*aeF*apF;
+  const Vc_auto=Vc_base*coolA.vcF*aeF*apF;
+  const vcInfo=vcBaseWithManual('m',Vc_auto);
+  const Vc_eff=vcInfo.base;
   const S_theo=Math.round(Vc_eff*1000/(Math.PI*Dd));
   const S_act=Math.min(S_theo, nmax);
   const Vc=Math.round(S_act*Math.PI*Dd/1000);
@@ -164,7 +236,7 @@ function refreshM() {
   document.getElementById('m_rec_body').innerHTML=`
 <p style="font-size:11px;line-height:1.9;color:var(--txt2)">
 <b>工具:</b> ${iscar!=='none'?ig.name:tl.name} | <b>材料:</b> ${db.name} | <b>油種:</b> ${coolA.name}<br>
-<b>Vc=</b>${iscar!=='none'?`${iscarVcRec(mat,'mill',proc)}(ISCAR推奨)`:`${db.vcM[proc]}(基準)×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油種)×${aeF.toFixed(2)}(ae/D)×${apF.toFixed(2)}(ap/D)=<b style="color:#ffd700">${Vc} m/min</b><br>
+<b>Vc=</b>${vcInfo.manual?`${Math.round(vcInfo.base)}(手入力)`:`${iscar!=='none'?`${iscarVcRec(mat,'mill',proc)}(ISCAR推奨)`:`${db.vcM[proc]}(基準)×${tl.vcF}(工具)`}×${coolA.vcF.toFixed(2)}(油種)×${aeF.toFixed(2)}(ae/D)×${apF.toFixed(2)}(ap/D)`}=<b style="color:#ffd700">${Vc} m/min</b><br>
 <b>S:</b> min(${S_theo},${nmax})=${S_act} rpm | <b>切りくず薄化:</b> ×${ctf.toFixed(2)}<br>
 <b>係合角:</b> φ=${phiD.toFixed(1)}° | <b>Zeff:</b> ${ze.toFixed(2)}<br>
 <b>hm:</b> ${hm.toFixed(4)} mm | <b>OH/D:</b> ${(OH/D).toFixed(2)} | <b>ohF:</b> ×${ohF.toFixed(3)}<br>
@@ -188,7 +260,9 @@ function calcM() {
   // 【v4.2】ap/ae・油種を反映した実効Vc / 切りくず薄化を反映した送り（ISCAR選択時はベースVc切替）
   const aeF=aeVcFactor(ae,D), apF=apVcFactor(ap,D), ctf=chipThinning(ae,D);
   const Vc_base0=(iscar!=='none')?iscarVcRec(mat,'mill',proc):db.vcM[proc]*tl.vcF;
-  const Vc_b=Vc_base0*coolA.vcF*aeF*apF;
+  const Vc_auto=Vc_base0*coolA.vcF*aeF*apF;
+  const vcInfo=vcBaseWithManual('m',Vc_auto);
+  const Vc_b=vcInfo.base;
   const S_t=Math.round(Vc_b*1000/(Math.PI*D));
   const S=Math.min(S_t,nmax);
   const Vc=Math.round(S*Math.PI*D/1000);
@@ -253,7 +327,7 @@ function calcM() {
 `【切削条件計算 — ソリッドエンドミル詳細ログ】
 
 ▼ Step1: 切削速度 (ap/ae・油種${iscar!=='none'?'・ISCARグレード':''}を反映)
-  Vc = ${iscar!=='none'?`${iscarVcRec(mat,'mill',proc)}(ISCAR ${(ISCAR_GRADES[iscar]||{}).name||iscar} 推奨)`:`${db.vcM[proc]}(基準) × ${tl.vcF}(工具)`} × ${coolA.vcF.toFixed(2)}(油種:${coolA.name}) × ${aeF.toFixed(2)}(ae/D=${(ae/D).toFixed(2)}) × ${apF.toFixed(2)}(ap/D=${(ap/D).toFixed(2)})
+  Vc = ${vcInfo.manual?`${Math.round(vcInfo.base)}(手入力)`:`${iscar!=='none'?`${iscarVcRec(mat,'mill',proc)}(ISCAR ${(ISCAR_GRADES[iscar]||{}).name||iscar} 推奨)`:`${db.vcM[proc]}(基準) × ${tl.vcF}(工具)`} × ${coolA.vcF.toFixed(2)}(油種:${coolA.name}) × ${aeF.toFixed(2)}(ae/D=${(ae/D).toFixed(2)}) × ${apF.toFixed(2)}(ap/D=${(ap/D).toFixed(2)})`}
      = ${Vc_b.toFixed(0)} m/min${iscar!=='none'?'\n  ※ ISCAR推奨Vcは目安。実加工は ISCAR ITA / カタログで最終確認':''}
   S_theo = Vc×1000/(π×D) = ${S_t} rpm → min(${S_t},${nmax}) = ${S} rpm
   Vc_actual = S×π×D/1000 = ${Vc} m/min
@@ -336,7 +410,9 @@ function refreshFM() {
     `<b>${gd.name}</b>: ${gd.desc}<br>アプローチ角κr=${kr}° | ノーズR=${nose==='W'?'ワイパー':nose+'mm'} | 💧${coolA.name}`
     +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — 推奨 ${iscarVcRec(mat,'mill','rough')} m/min基準（ITA要確認）`:'');
 
-  const Vc_base=(iscar!=='none'?iscarVcRec(mat,'mill','rough'):db.vcM[proc]*gd.vcF)*coolA.vcF*aeF*apF;
+  const Vc_auto=(iscar!=='none'?iscarVcRec(mat,'mill','rough'):db.vcM[proc]*gd.vcF)*coolA.vcF*aeF*apF;
+  const vcInfo=vcBaseWithManual('fm',Vc_auto);
+  const Vc_base=vcInfo.base;
   const S_t=Math.round(Vc_base*1000/(Math.PI*Math.max(D,1)));
   const S=Math.min(S_t,nmax);
   const Vc=Math.round(S*Math.PI*Math.max(D,1)/1000);
@@ -394,7 +470,9 @@ function calcFM() {
   const cool=s('fm_cool')||'wet', coolA=coolantAdjust(cool,mat,'coated');
   const iscar=s('fm_iscar')||'none';
   const aeF=aeVcFactor(Math.min(ae,D),D), apF=apVcFactor(ap,D), ctf=chipThinning(Math.min(ae,D),D);
-  const Vc_b=(iscar!=='none'?iscarVcRec(mat,'mill','rough'):db.vcM['rough']*gd.vcF)*coolA.vcF*aeF*apF;
+  const Vc_auto=(iscar!=='none'?iscarVcRec(mat,'mill','rough'):db.vcM['rough']*gd.vcF)*coolA.vcF*aeF*apF;
+  const vcInfo=vcBaseWithManual('fm',Vc_auto);
+  const Vc_b=vcInfo.base;
   const S_t=Math.round(Vc_b*1000/(Math.PI*D));
   const S=Math.min(S_t,nmax);
   const Vc=Math.round(S*Math.PI*D/1000);
@@ -457,77 +535,63 @@ function refreshIE() {
   const cool=s('ie_cool')||'wet', coolA=coolantAdjust(cool,mat,'coated');
   const iscar=s('ie_iscar')||'none';
   const ig=ISCAR_GRADES[iscar]||ISCAR_GRADES.none;
-  const aeF=(ae>0&&D>0)?aeVcFactor(Math.min(ae,D),D):1.0;
-  const apF=(ap>0&&D>0)?apVcFactor(ap,D):1.0;
-  const ctf=(ae>0&&D>0)?chipThinning(Math.min(ae,D),D):1.0;
+  const cond=conditionLevel('ie');
+  const ctx={D,Z,mat,grade,kr,ap,ae,proc,Pm,eta,nmax,shape,re,coolA,iscar};
 
   document.getElementById('ie_tool_desc').innerHTML=
-    `<b>${gd.name}</b>: ${gd.desc}<br>形状:${shape} κr=${kr}° Rε=${re}mm | 💧${coolA.name}`
+    `<b>${gd.name}</b>: ${gd.desc}<br>形状:${shape} κr=${kr}° Rε=${re}mm | ${cond.name} | 💧${coolA.name}`
     +(iscar!=='none'?`<br>🔶 <b>${ig.name}</b> [ISO ${ig.iso}] — 推奨 ${iscarVcRec(mat,'mill',proc)} m/min基準（ITA要確認）`:'');
 
-  const Vc_b=(iscar!=='none'?iscarVcRec(mat,'mill',proc):db.vcM[proc]*gd.vcF)*coolA.vcF*aeF*apF;
-  const S_t=Math.round(Vc_b*1000/(Math.PI*Math.max(D,1)));
-  const S=Math.min(S_t,nmax);
-  const Vc=Math.round(S*Math.PI*Math.max(D,1)/1000);
-  document.getElementById('ie_Vc').value=Vc;
+  const r=calcIECore(ctx,cond);
+  document.getElementById('ie_Vc').value=r.Vc;
 
   if(!D||D<=0||!ap||ap<=0||!ae||ae<=0){setBtn('ie_btn',false);document.getElementById('ie_fz').value='';return;}
 
-  // インデキサブルはソリッドより剛性が低い(チップ取付部)→σを下げる
-  const fz_max=fzMaxMilling(Math.min(ae,D),D,ap,Z,mat,380*gd.fzF,0.65,Vc,Pm,eta,D*0.5);
-  const fz_cat=(FM_FZ_CAT[mat]||FM_FZ_CAT.steel)[proc]*gd.fzF*(1+0.2*(1-kr/90))*coolA.fzF*ctf;
-  const fz=Math.min(fz_max,fz_cat);
-
-  const FcT=FcTotal(fz,Math.min(ae,D),D,ap,Z,mat);
-  const Pc=(FcT*Vc)/(60*1000);
-  const loadP=(Pc/(Pm*eta))*100;
-  const hm=hmM(fz,Math.min(ae,D),D);
+  const hm=hmM(r.fz,Math.min(ae,D),D);
   const phiD4=phiDeg(Math.min(ae,D),D);
-  const Rz=theorRz(fz,re).toFixed(1);
-  const feasible=fz>=0.001&&loadP<=100;
+  const Rz=theorRz(r.fz,re).toFixed(1);
+  const feasible=r.fz>=0.001&&r.loadP<=100;
 
   const items=[
+    {l:'条件レベル',v:cond.name},
+    {l:'基準Vc',v:Math.round(r.vcBase)+' m/min'+(r.vcManual?' 手入力':' 自動')},
     {l:'係合角',v:phiD4.toFixed(1)+'°'},
     {l:'hm',v:hm.toFixed(4)+' mm'},
-    {l:'切削力',v:FcT.toFixed(0)+' N'},
-    {l:'実動力',v:Pc.toFixed(2)+' kW'},
-    {l:'機械負荷',v:loadP.toFixed(0)+'%'},
+    {l:'切削力',v:r.FcT.toFixed(0)+' N'},
+    {l:'実動力',v:r.Pc.toFixed(2)+' kW'},
+    {l:'機械負荷',v:r.loadP.toFixed(0)+'%'},
     {l:'理論面粗さ',v:Rz+' μm'},
   ];
-  setPhys('ie',items,feasible?`✅ 適正 ${loadP.toFixed(0)}%`:'🚫 加工不可',feasible?'ok':'crit');
-  setFeedField('ie_fz',fz,!feasible?'ng':loadP>80?'warn':'ok');
+  setPhys('ie',items,feasible?`✅ ${cond.name} ${r.F}mm/min / 負荷${r.loadP.toFixed(0)}%`:'🚫 加工不可',feasible?'ok':'crit');
+  setFeedField('ie_fz',r.fz,!feasible?'ng':r.loadP>80?'warn':'ok');
   setBtn('ie_btn',feasible);
+  const rows=ieConditionRows(ctx);
 
   document.getElementById('ie_rec_body').innerHTML=`
 <p style="font-size:11px;line-height:1.9;color:var(--txt2)">
-${gd.name} | κr=${kr}° | Rε=${re}mm | 形状:${shape}<br>
-<b>fz_max:</b> ${p4(fz_max)} | <b>fz_cat:</b> ${p4(fz_cat)}<br>
-<b>確定fz:</b> <b style="color:#ffd700">${p4(fz)} mm/刃</b> | <b>負荷:</b> ${loadP.toFixed(0)}%<br>
-<b>理論Rz:</b> ${Rz} μm
-</p>`;
+${gd.name} | κr=${kr}° | Rε=${re}mm | 形状:${shape} | ${r.vcManual?'手入力Vc':'自動Vc'}<br>
+<b>Vc:</b> ${Math.round(r.vcBase)}×${cond.vcF.toFixed(2)}=${r.Vc} m/min | <b>S:</b> ${r.S} rpm${r.nlimited?'（上限）':''}<br>
+<b>fz_max:</b> ${p4(r.fz_max)} | <b>fz_cat:</b> ${p4(r.fz_cat)} | <b>確定fz:</b> <b style="color:#ffd700">${p4(r.fz)} mm/刃</b><br>
+<b>F:</b> <b style="color:#ffd700">${r.F} mm/min</b> | <b>負荷:</b> ${r.loadP.toFixed(0)}% | <b>理論Rz:</b> ${Rz} μm
+</p>
+${conditionRowsHtml(rows,'fz')}`;
 }
 
 function calcIE() {
   const D=n('ie_D'), Z=n('ie_Z')||2;
   const mat=s('ie_mat'), grade=s('ie_grade'), kr=parseFloat(s('ie_kr'))||45;
   const ap=n('ie_ap'), ae=n('ie_ae'), proc=s('ie_proc');
-  const Pm=n('ie_motor'), eta=n('ie_eta'), nmax=n('ie_nmax')||8000;
+  const Pm=n('ie_motor')||11, eta=n('ie_eta')||0.80, nmax=n('ie_nmax')||8000;
   const re=parseFloat(s('ie_re'))||0.8;
+  const shape=s('ie_shape');
   const gd=GRADE[grade]||GRADE.P20, db=MAT[mat]||MAT.steel;
   const cool=s('ie_cool')||'wet', coolA=coolantAdjust(cool,mat,'coated');
   const iscar=s('ie_iscar')||'none';
-  const aeF=aeVcFactor(Math.min(ae,D),D), apF=apVcFactor(ap,D), ctf=chipThinning(Math.min(ae,D),D);
-  const Vc_b=(iscar!=='none'?iscarVcRec(mat,'mill',proc):db.vcM[proc]*gd.vcF)*coolA.vcF*aeF*apF;
-  const S_t=Math.round(Vc_b*1000/(Math.PI*D));
-  const S=Math.min(S_t,nmax);
-  const Vc=Math.round(S*Math.PI*D/1000);
-  const fz_max=fzMaxMilling(Math.min(ae,D),D,ap,Z,mat,380*gd.fzF,0.65,Vc,Pm,eta,D*0.5);
-  const fz_cat=(FM_FZ_CAT[mat]||FM_FZ_CAT.steel)[proc]*gd.fzF*(1+0.2*(1-kr/90))*coolA.fzF*ctf;
-  const fz=Math.min(fz_max,fz_cat);
-  const F=Math.round(S*fz*Z);
-  const FcT=FcTotal(fz,Math.min(ae,D),D,ap,Z,mat);
-  const Pc=(FcT*Vc)/(60*1000);
-  const loadP=(Pc/(Pm*eta))*100;
+  const cond=conditionLevel('ie');
+  const ctx={D,Z,mat,grade,kr,ap,ae,proc,Pm,eta,nmax,shape,re,coolA,iscar};
+  const r=calcIECore(ctx,cond);
+  const rows=ieConditionRows(ctx);
+  const Vc=r.Vc, S=r.S, fz=r.fz, F=r.F, FcT=r.FcT, Pc=r.Pc, loadP=r.loadP;
   const MRR=(ap*Math.min(ae,D)*F/1000).toFixed(2);
   const Rz=theorRz(fz,re).toFixed(1);
   const TaylorT=taylorLife(Vc,mat);
@@ -535,6 +599,7 @@ function calcIE() {
   document.getElementById('ie_rg').innerHTML=`
     <div class="res-item res-hl"><div class="res-lbl">主軸回転数 S</div><div class="res-val">${S} rpm</div></div>
     <div class="res-item res-hl"><div class="res-lbl">🏆 送り速度 F</div><div class="res-val">${F} mm/min</div></div>
+    <div class="res-item res-hl"><div class="res-lbl">条件レベル</div><div class="res-val">${cond.name}</div></div>
     <div class="res-item"><div class="res-lbl">Vc</div><div class="res-val">${Vc} m/min</div></div>
     <div class="res-item"><div class="res-lbl">確定 fz</div><div class="res-val">${p4(fz)} mm/刃</div></div>
     <div class="res-item"><div class="res-lbl">切削力</div><div class="res-val">${FcT.toFixed(0)} N</div></div>
@@ -547,11 +612,14 @@ function calcIE() {
   if(loadP>80) wc.innerHTML+='<div class="info-box ib-red"><h3>⚠ 高負荷</h3><p>ap/aeを低減推奨</p></div>';
   document.getElementById('ie_fml').textContent=
 `【チップ式エンドミル計算ログ】
-${gd.name} | κr=${kr}° | Rε=${re}mm
-Vc=${Vc} m/min | S=${S} rpm
-fz=${p4(fz)} mm/刃 | F=${F} mm/min
+${gd.name} | κr=${kr}° | Rε=${re}mm | ${cond.name}
+基準Vc=${Math.round(r.vcBase)} m/min${r.vcManual?'（手入力）':'（自動）'} | Vc=${Vc} m/min | S=${S} rpm
+fz_max=${p4(r.fz_max)} | fz_cat=${p4(r.fz_cat)} | fz=${p4(fz)} mm/刃 | F=${F} mm/min
 Fc=${FcT.toFixed(0)} N | Pc=${Pc.toFixed(2)} kW | 負荷${loadP.toFixed(0)}%
-Rz=${Rz} μm | MRR=${MRR} cm³/min | T=${TaylorT.toFixed(0)} min`;
+Rz=${Rz} μm | MRR=${MRR} cm³/min | T=${TaylorT.toFixed(0)} min
+
+低/標準/高:
+${rows.map(x=>`${x.name}: Vc${x.Vc} / S${x.S} / fz${x.feed} / F${x.F} / 負荷${x.load}%`).join('\n')}`;
   document.getElementById('ie_result_wrap').classList.remove('hidden');
   addCompare({type:'インデキサブルEM',mat:db.name,D,Vc,S,fz:p4(fz),F,Fc:FcT.toFixed(0),Pc:Pc.toFixed(2),load:loadP.toFixed(0),MRR:MRR+' cm³/min',T:TaylorT.toFixed(0)+'min',ok:loadP<=80});
 }
@@ -583,7 +651,9 @@ function refreshHF() {
     高送り倍率: <b style="color:#86efac">×${hfF.toFixed(2)}</b> (通常エンドミル比)<br>
     📌 原理: κr↓→切削厚さh=fz×sin(κr)↓→同じ切削力でより大きなfzが可能`;
 
-  const Vc_b=(iscar!=='none'?iscarVcRec(mat,'mill',proc):db.vcM[proc]*gd.vcF*1.1)*coolA.vcF*aeF;
+  const Vc_auto=(iscar!=='none'?iscarVcRec(mat,'mill',proc):db.vcM[proc]*gd.vcF*1.1)*coolA.vcF*aeF;
+  const vcInfo=vcBaseWithManual('hf',Vc_auto);
+  const Vc_b=vcInfo.base;
   const S_t=Math.round(Vc_b*1000/(Math.PI*Math.max(D,1)));
   const S=Math.min(S_t,nmax);
   const Vc=Math.round(S*Math.PI*Math.max(D,1)/1000);
@@ -644,7 +714,9 @@ function calcHF() {
   const hfF=hfFzFactor(kr);
   const axR=krAxialRatio(kr);
   const sinKr=Math.sin(kr*Math.PI/180);
-  const Vc_b=(iscar!=='none'?iscarVcRec(mat,'mill',proc):db.vcM[proc]*gd.vcF*1.1)*coolA.vcF*aeF;
+  const Vc_auto=(iscar!=='none'?iscarVcRec(mat,'mill',proc):db.vcM[proc]*gd.vcF*1.1)*coolA.vcF*aeF;
+  const vcInfo=vcBaseWithManual('hf',Vc_auto);
+  const Vc_b=vcInfo.base;
   const S_t=Math.round(Vc_b*1000/(Math.PI*D));
   const S=Math.min(S_t,nmax);
   const Vc=Math.round(S*Math.PI*D/1000);

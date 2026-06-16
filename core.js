@@ -392,6 +392,42 @@ function n(id){const v=parseFloat(document.getElementById(id).value);return isNa
 function s(id){const el=document.getElementById(id);return el?el.value:'';}
 function fmtT(sec){const m=Math.floor(sec/60),s2=Math.round(sec%60);return m>0?`${m}分${s2}秒`:`${s2}秒`;}
 
+/* 条件レベル（低/標準/高）とVc手入力。
+   手入力Vcは「標準Vc」として扱い、低/高レベルの係数を掛けて使う。 */
+const CONDITION_LEVEL = {
+  low: {name:'低条件', vcF:0.80, feedF:0.80, desc:'初回・びびり確認・工具寿命優先'},
+  std: {name:'標準条件', vcF:1.00, feedF:1.00, desc:'通常の安定加工目安'},
+  high:{name:'高条件', vcF:1.15, feedF:1.20, desc:'剛性・給油・排出が良い時の生産寄り'}
+};
+
+function conditionLevel(prefix){
+  return CONDITION_LEVEL[s(prefix+'_cond')] || CONDITION_LEVEL.std;
+}
+
+function vcBaseWithManual(prefix, autoVc){
+  const manual = n(prefix+'_vc_manual');
+  return {
+    base: manual>0 ? manual : autoVc,
+    manual: manual>0
+  };
+}
+
+function rpmFromVc(Vc, D, nmax){
+  const Dd = Math.max(D, 0.001);
+  const theo = Math.round(Vc*1000/(Math.PI*Dd));
+  const S = Math.min(theo, nmax || theo);
+  const actualVc = Math.round(S*Math.PI*Dd/1000);
+  return {theo, S, actualVc, limited:S<theo};
+}
+
+function conditionRowsHtml(rows, feedLabel){
+  if(!rows || rows.length===0) return '';
+  return `<table class="cmp-table" style="margin-top:8px">
+    <tr><th>条件</th><th>Vc</th><th>S</th><th>${feedLabel}</th><th>F</th><th>負荷</th></tr>
+    ${rows.map(r=>`<tr><td>${r.name}</td><td>${r.Vc} m/min</td><td>${r.S} rpm${r.limited?'*':''}</td><td>${r.feed}</td><td class="hi">${r.F} mm/min</td><td>${r.load}%</td></tr>`).join('')}
+  </table>`;
+}
+
 function getToolChips(toolKey) {
   const t=TOOL[toolKey];
   if(!t) return '';
